@@ -260,8 +260,9 @@ Semua dokumentasi tersedia di folder `docs/`:
 - 📕 [FEATURES.md](./docs/FEATURES.md) - Daftar fitur lengkap
 - 📓 [TECH_STACK.md](./docs/TECH_STACK.md) - Teknologi yang digunakan
 - 📔 [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Troubleshooting guide
-- 📋 [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API reference lengkap
-- 📊 [HACKATHON_ANALYSIS.md](./HACKATHON_ANALYSIS.md) - Analisis kesesuaian hackathon
+- 📋 [API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md) - API reference lengkap
+- 📊 [HACKATHON_ANALYSIS.md](./docs/HACKATHON_ANALYSIS.md) - Analisis kesesuaian hackathon
+- 📚 [docs/README.md](./docs/README.md) - Index dokumentasi lengkap
 
 ---
 
@@ -347,7 +348,7 @@ Semua dokumentasi tersedia di folder `docs/`:
 - `POST /api/nlp/classify` - Classify report
 - `POST /api/nlp/redact` - Redact PII
 
-**📖 Dokumentasi lengkap**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+**📖 Dokumentasi lengkap**: [docs/API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md)
 
 ---
 
@@ -414,7 +415,7 @@ npm start
 - ✅ **Modern Tech Stack**: Next.js 16, React 19, TypeScript, PostgreSQL
 - ✅ **Professional UI/UX**: Modern design, responsive, accessible
 
-**📖 Analisis lengkap**: [HACKATHON_ANALYSIS.md](./HACKATHON_ANALYSIS.md)
+**📖 Analisis lengkap**: [docs/HACKATHON_ANALYSIS.md](./docs/HACKATHON_ANALYSIS.md)
 
 ---
 
@@ -443,7 +444,7 @@ This project is created for **IT Fair XIV Hackathon Competition 2025**.
 - ✨ **Features**: [docs/FEATURES.md](./docs/FEATURES.md)
 - 🛠️ **Tech Stack**: [docs/TECH_STACK.md](./docs/TECH_STACK.md)
 - 🔧 **Troubleshooting**: [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)
-- 📡 **API Docs**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- 📡 **API Docs**: [docs/API_DOCUMENTATION.md](./docs/API_DOCUMENTATION.md)
 
 ---
 
