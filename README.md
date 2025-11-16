@@ -424,9 +424,9 @@ npm start
 **Weladalah Team - IT Fair XIV Hackathon 2025**
 
 - **Abhi** - Full Stack Developer
-- **Ghiffari** - Backend Developer
-- **Dyandra** - Frontend Developer
-- **Faris** - Blockchain Developer
+- **Ghiffari** - Blockchain & AI Developer
+- **Dyandra** - Frontend Developer and UI/UX Design
+- **Faris** - Problem Solver & Solution
 
 ---
 
