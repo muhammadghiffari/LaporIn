@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import useAuthStore from '@/store/authStore';
+import Layout from '@/components/Layout';
 
 interface Report {
   id: number;
@@ -33,13 +34,19 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-    if (!isAuthenticated) {
-      router.push('/login');
-    } else {
-      fetchReport();
-    }
-  }, [params.id, isAuthenticated]);
+    const init = async () => {
+      await checkAuth();
+      // Wait a bit for auth state to update
+      setTimeout(() => {
+        if (!isAuthenticated || !user) {
+          router.push('/login');
+        } else {
+          fetchReport();
+        }
+      }, 100);
+    };
+    init();
+  }, [params.id]);
 
   const fetchReport = async () => {
     try {
@@ -52,33 +59,55 @@ export default function ReportDetailPage() {
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (!report) return <div>Report not found</div>;
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64 text-gray-600">Memuat...</div>
+      </Layout>
+    );
+  }
+  if (!report) {
+    return (
+      <Layout>
+        <div className="text-center py-12">
+          <p className="text-gray-600">Laporan tidak ditemukan</p>
+        </div>
+      </Layout>
+    );
+  }
 
   const isPengurus = user?.role === 'pengurus' || user?.role === 'admin';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="text-blue-600 hover:text-blue-800"
-              >
-                ← Kembali
-              </button>
+    <Layout>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-6">
+          {/* Security / Blockchain Card */}
+          <div className="border border-gray-200 rounded-2xl p-6 bg-gradient-to-br from-gray-50 to-blue-50">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Keamanan & Audit</h2>
+              <span className="text-xs text-gray-500">Terekam di blockchain</span>
             </div>
-            <div className="flex items-center gap-4">
-              <span>{user?.name}</span>
+            <div className="mt-2 text-sm text-gray-700">
+              Data penting laporan dicatat sebagai jejak audit yang tidak bisa diubah.
             </div>
+            {report.blockchain_tx_hash ? (
+              <div className="mt-3">
+                <div className="text-xs text-gray-500">Kode Enkripsi (Tx Hash)</div>
+                <a
+                  href={`https://mumbai.polygonscan.com/tx/${report.blockchain_tx_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-mono break-all"
+                >
+                  {report.blockchain_tx_hash}
+                </a>
+              </div>
+            ) : (
+              <div className="mt-3 text-sm text-gray-500">
+                Transaksi blockchain belum tersedia untuk laporan ini.
+              </div>
+            )}
           </div>
-        </div>
-      </nav>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
           <h1 className="text-3xl font-bold mb-4">{report.title}</h1>
 
           <div className="space-y-4">
@@ -136,8 +165,16 @@ export default function ReportDetailPage() {
 
             {report.blockchain_tx_hash && (
               <div>
-                <h3 className="font-semibold text-gray-700">Blockchain Hash</h3>
-                <p className="text-xs text-gray-500 font-mono">{report.blockchain_tx_hash}</p>
+                <h3 className="font-semibold text-gray-700">Blockchain</h3>
+                <a
+                  href={`https://mumbai.polygonscan.com/tx/${report.blockchain_tx_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:text-blue-800 font-mono break-all"
+                  title="Lihat transaksi di explorer"
+                >
+                  {report.blockchain_tx_hash}
+                </a>
               </div>
             )}
 
@@ -162,10 +199,46 @@ export default function ReportDetailPage() {
                 ))}
               </div>
             </div>
+
+            {/* Cancel Report Button (hanya untuk warga, hanya jika status pending) */}
+            {user && user.id === report.user_id && report.status === 'pending' && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <button
+                  onClick={async () => {
+                    const reason = prompt('Alasan pembatalan (opsional):');
+                    if (reason !== null) {
+                      try {
+                        await api.post(`/reports/${report.id}/cancel`, { reason: reason || undefined });
+                        alert('Laporan berhasil dibatalkan. Perubahan status telah dicatat di blockchain.');
+                        router.push('/dashboard');
+                      } catch (error: any) {
+                        alert(error.response?.data?.error || 'Gagal membatalkan laporan');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium"
+                >
+                  Batalkan Laporan
+                </button>
+                <p className="text-xs text-gray-500 mt-2">
+                  Catatan: Pembatalan akan dicatat di blockchain untuk transparansi. Laporan tidak akan dihapus, hanya status diubah menjadi "cancelled".
+                </p>
+              </div>
+            )}
+
+            {/* Cancellation Info */}
+            {report.status === 'cancelled' && report.cancellation_reason && (
+              <div className="mt-6 pt-6 border-t border-gray-200 bg-red-50 rounded-2xl p-4">
+                <h3 className="font-semibold text-red-900 mb-2">Laporan Dibatalkan</h3>
+                <p className="text-sm text-red-800">Alasan: {report.cancellation_reason}</p>
+                <p className="text-xs text-red-600 mt-2">
+                  Status pembatalan telah dicatat di blockchain dan tidak dapat diubah.
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      </main>
-    </div>
+    </Layout>
   );
 }
 

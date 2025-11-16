@@ -13,6 +13,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  hasCheckedAuth?: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (userData: {
     email: string;
@@ -29,12 +30,14 @@ const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
   isAuthenticated: false,
+  hasCheckedAuth: false,
 
   login: async (email: string, password: string) => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
       }
       set({ user: data.user, token: data.token, isAuthenticated: true });
       return { success: true };
@@ -48,6 +51,7 @@ const useAuthStore = create<AuthState>((set) => ({
       const { data } = await api.post('/auth/register', userData);
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
       }
       set({ user: data.user, token: data.token, isAuthenticated: true });
       return { success: true };
@@ -59,15 +63,20 @@ const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, token: null, isAuthenticated: false, hasCheckedAuth: true });
   },
 
   checkAuth: () => {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('token');
+      const userJson = localStorage.getItem('user');
+      const parsedUser = userJson ? (JSON.parse(userJson) as User) : null;
       if (token) {
-        set({ token, isAuthenticated: true });
+        set({ token, user: parsedUser, isAuthenticated: true, hasCheckedAuth: true });
+      } else {
+        set({ hasCheckedAuth: true });
       }
     }
   },

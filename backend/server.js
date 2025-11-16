@@ -4,6 +4,8 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth.routes');
 const reportsRoutes = require('./routes/reports.routes');
+const chatRoutes = require('./routes/chat.routes');
+const { router: nlpRoutes } = require('./routes/nlp.routes');
 
 const app = express();
 
@@ -14,6 +16,8 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/nlp', nlpRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

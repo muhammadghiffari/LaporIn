@@ -1,9 +1,16 @@
-const OpenAI = require('openai');
 require('dotenv').config();
-
-const openai = new OpenAI({
+let openai = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    const OpenAI = require('openai');
+    openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+  }
+} catch (err) {
+  // If OpenAI SDK throws due to missing key or other init error, proceed without it
+  openai = null;
+}
 
 const CATEGORIES = {
   infrastruktur: ['jalan', 'lampu', 'got', 'selokan', 'saluran', 'drainase', 'listrik', 'air'],
@@ -21,6 +28,11 @@ const URGENCY_KEYWORDS = {
 async function processReport(text) {
   try {
     const startTime = Date.now();
+    
+    // If OpenAI is not configured, use fallback immediately
+    if (!openai) {
+      return fallbackProcessing(text);
+    }
     
     // Call OpenAI API
     const response = await openai.chat.completions.create({
@@ -49,13 +61,21 @@ async function processReport(text) {
       temperature: 0.3,
     });
 
-    const result = JSON.parse(response.choices[0].message.content);
+    const content = response?.choices?.[0]?.message?.content || '';
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch {
+      // If parsing fails, use fallback
+      return fallbackProcessing(text);
+    }
+
     const processingTime = Date.now() - startTime;
 
     return {
-      summary: result.summary,
-      category: result.category,
-      urgency: result.urgency,
+      summary: result.summary || fallbackProcessing(text).summary,
+      category: result.category || fallbackProcessing(text).category,
+      urgency: result.urgency || fallbackProcessing(text).urgency,
       processingTime,
     };
   } catch (error) {

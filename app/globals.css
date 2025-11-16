@@ -3,13 +3,15 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --font-inter: var(--font-inter);
+  --font-poppins: var(--font-poppins);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-poppins);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,7 +22,29 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: radial-gradient(1200px 600px at 20% -10%, #e0f2fe 0%, rgba(255,255,255,0) 40%),
+              radial-gradient(1000px 500px at 120% 10%, #f5f3ff 0%, rgba(255,255,255,0) 35%),
+              var(--background);
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-poppins), system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-slow {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 400ms ease-out both;
+}
+.animate-fade-in-slow {
+  animation: fade-in-slow 650ms ease-out both;
 }
