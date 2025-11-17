@@ -189,7 +189,7 @@ export default function LaporanPage() {
                   fullWidth
                   size="medium"
                   select
-                  label="Filter Status"
+                  // label="Filter Status"
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
                   variant="outlined"
@@ -217,7 +217,7 @@ export default function LaporanPage() {
                   fullWidth
                   size="medium"
                   select
-                  label="Filter Urgensi"
+                  // label="Filter Urgensi"
                   value={filterUrgency}
                   onChange={(e) => setFilterUrgency(e.target.value)}
                   variant="outlined"

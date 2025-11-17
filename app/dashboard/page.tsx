@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [loadingStats, setLoadingStats] = useState<boolean>(true);
   const [statsWarga, setStatsWarga] = useState<any>(null);
   const [reportPeriod, setReportPeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [wargaPeriod, setWargaPeriod] = useState<'day' | 'week' | 'month'>('month');
   // Peran yang boleh melihat grafik/statistik
   const allowedRoles = ['pengurus', 'admin', 'sekretaris_rt', 'ketua_rt', 'admin_rw'];
   const isPengurus = allowedRoles.includes(user?.role || '');
@@ -65,7 +66,7 @@ export default function DashboardPage() {
       try {
         const { data } = await api.get(`/reports/stats?period=${reportPeriod}`);
         setStats(data);
-        const wargaRes = await api.get('/auth/stats/warga');
+        const wargaRes = await api.get(`/auth/stats/warga?period=${wargaPeriod}`);
         setStatsWarga(wargaRes.data);
       } catch (e) {
         console.error('Error fetching stats:', e);
@@ -74,7 +75,7 @@ export default function DashboardPage() {
       }
     };
     fetchStats();
-  }, [isPengurus, reportPeriod]);
+  }, [isPengurus, reportPeriod, wargaPeriod]);
 
   if (!hasCheckedAuth) {
     return (
@@ -84,6 +85,21 @@ export default function DashboardPage() {
     );
   }
   if (!isAuthenticated) return null;
+
+  const dashboardLabel = () => {
+    switch (user?.role) {
+      case 'admin':
+        return 'Dashboard Admin';
+      case 'admin_rw':
+      case 'ketua_rt':
+      case 'sekretaris_rt':
+        return 'Dashboard RT/RW';
+      case 'pengurus':
+        return 'Dashboard Pengurus';
+      default:
+        return 'Dashboard';
+    }
+  };
 
   const kpiCard = (label: string, value: number | string, color = 'bg-white') => (
     <div className={`p-6 rounded-2xl shadow-sm border border-gray-200 ${color} transition-all hover:shadow-md`}>
@@ -136,6 +152,84 @@ export default function DashboardPage() {
               responsive: true,
               maintainAspectRatio: false,
               plugins: { 
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: 'rgba(0,0,0,0.8)',
+                  padding: 12,
+                  titleFont: { size: 14, weight: 'bold' },
+                  bodyFont: { size: 13 },
+                },
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  grid: {
+                    color: 'rgba(0,0,0,0.05)',
+                  },
+                  ticks: {
+                    stepSize: 1,
+                  },
+                },
+                x: {
+                  grid: {
+                    display: false,
+                  },
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const wargaGrowthChart = () => {
+    const labels = (statsWarga?.growth || []).map((d: any) => d.label);
+    const counts = (statsWarga?.growth || []).map((d: any) => Number(d.count));
+    const periodLabel = wargaPeriod === 'day' ? 'Hari' : wargaPeriod === 'week' ? 'Minggu' : 'Bulan';
+
+    return (
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="font-semibold text-gray-900">Pertumbuhan Warga</div>
+            <div className="text-sm text-gray-500">Jumlah warga baru per {periodLabel}</div>
+          </div>
+          <select
+            value={wargaPeriod}
+            onChange={(e) => setWargaPeriod(e.target.value as 'day' | 'week' | 'month')}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="day">30 Hari</option>
+            <option value="week">12 Minggu</option>
+            <option value="month">12 Bulan</option>
+          </select>
+        </div>
+        <div style={{ height: '300px' }}>
+          <Line
+            data={{
+              labels,
+              datasets: [
+                {
+                  label: `Warga Baru per ${periodLabel}`,
+                  data: counts,
+                  borderColor: 'rgb(34,197,94)',
+                  backgroundColor: 'rgba(34,197,94,0.15)',
+                  borderWidth: 3,
+                  tension: 0.4,
+                  fill: true,
+                  pointRadius: 5,
+                  pointHoverRadius: 7,
+                  pointBackgroundColor: 'rgb(34,197,94)',
+                  pointBorderColor: '#fff',
+                  pointBorderWidth: 2,
+                },
+              ],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
                 legend: { display: false },
                 tooltip: {
                   backgroundColor: 'rgba(0,0,0,0.8)',
@@ -267,17 +361,21 @@ export default function DashboardPage() {
         {/* Role capability banner */}
         <div className="mb-6 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
           <div className="text-sm text-gray-600">
-            Peran Anda: <span className="font-semibold text-gray-900">{user?.role}</span>
+            Peran Anda: <span className="font-semibold text-gray-900 capitalize">{user?.role?.replace('_', ' ')}</span>
             </div>
           <div className="text-xs text-gray-500 mt-1">
-            {isPengurus
+            {user?.role === 'admin'
+              ? 'Anda dapat mengelola sistem dan memonitor seluruh laporan.'
+              : ['admin_rw', 'ketua_rt', 'sekretaris_rt'].includes(user?.role || '')
+              ? 'Anda dapat memantau laporan di wilayah RT/RW dan memastikan tindak lanjut.'
+              : isPengurus
               ? 'Anda dapat memantau statistik, melihat semua laporan sesuai kewenangan, dan mengelola tindak lanjut.'
               : 'Anda dapat membuat laporan baru dan memantau progres laporan Anda.'}
           </div>
         </div>
         {isPengurus ? (
           <div className="space-y-8 animate-fade-in">
-            <h2 className="text-2xl font-bold">Dashboard Pengurus</h2>
+            <h2 className="text-2xl font-bold">{dashboardLabel()}</h2>
             {/* Role-specific panels */}
             {user?.role === 'admin' ? <AdminSystemPanel /> : <RTQueuePanel />}
             {/* KPIs */}
@@ -299,9 +397,10 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
-                {/* Single time series chart with period selector */}
-                <div className="grid grid-cols-1 gap-6">
+                {/* Time series charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {timeSeriesChart()}
+                  {wargaGrowthChart()}
                 </div>
                 {/* Bar charts for distributions */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
