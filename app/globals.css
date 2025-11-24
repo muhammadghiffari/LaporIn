@@ -42,9 +42,21 @@ h1, h2, h3, h4, h5, h6 {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes float {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  33% { transform: translateY(-10px) translateX(5px); }
+  66% { transform: translateY(5px) translateX(-5px); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .animate-fade-in {
   animation: fade-in 400ms ease-out both;
 }
 .animate-fade-in-slow {
   animation: fade-in-slow 650ms ease-out both;
+}
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
 }

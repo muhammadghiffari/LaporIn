@@ -4,7 +4,11 @@
   "description": "LaporIn Blockchain Smart Contracts",
   "scripts": {
     "compile": "hardhat compile",
-    "deploy": "hardhat run scripts/deploy.js",
+    "deploy": "hardhat run scripts/deploy.js --network amoy",
+    "deploy:mumbai": "hardhat run scripts/deploy.js --network mumbai",
+    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
+    "node": "hardhat node",
+    "keys": "hardhat run get-local-keys.js --network hardhat",
     "test": "hardhat test"
   },
   "dependencies": {

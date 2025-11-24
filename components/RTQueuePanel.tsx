@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import useAuthStore from '@/store/authStore';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from './Toast';
 
 interface Report {
   id: number;
@@ -21,10 +23,23 @@ export default function RTQueuePanel() {
   const { user } = useAuthStore();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 5; // 5 item per halaman
+  const { toasts, success, error: showError, removeToast } = useToast();
+  const canManageStatus = ['pengurus', 'ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(user?.role || '');
 
-  const fetchReports = async () => {
-    setLoading(true);
+  // Calculate pagination
+  const totalPages = Math.ceil(reports.length / itemsPerPage);
+  const startIndex = (page - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedReports = reports.slice(startIndex, endIndex);
+
+  const fetchReports = async (isBackgroundRefresh = false) => {
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+    }
     try {
       const response = await api.get('/reports');
       
@@ -46,9 +61,9 @@ export default function RTQueuePanel() {
       const rtRw = user?.rt_rw || '';
       let list: Report[] = reportsData;
       
-      // Hanya filter RT/RW untuk role RT/RW (ketua_rt, sekretaris_rt, admin_rw)
+      // Hanya filter RT/RW untuk role RT/RW (ketua_rt, sekretaris_rt/sekretaris, admin_rw)
       // Admin dan Pengurus tidak perlu filter
-      if (rtRw && ['ketua_rt', 'sekretaris_rt', 'admin_rw'].includes(user?.role || '')) {
+      if (rtRw && ['ketua_rt', 'sekretaris_rt', 'sekretaris', 'admin_rw'].includes(user?.role || '')) {
         list = list.filter((r: any) => {
           const reportRtRw = r.rt_rw || r.location || '';
           return reportRtRw.includes(rtRw) || rtRw.includes(reportRtRw);
@@ -62,7 +77,9 @@ export default function RTQueuePanel() {
       }
       
       console.log('[RTQueuePanel] Filtered reports:', list.length, 'from', reportsData.length);
-      setReports(list.slice(0, 50));
+      setReports(list);
+      // Reset to page 1 when reports change
+      setPage(1);
     } catch (e: any) {
       console.error('[RTQueuePanel] Error fetching reports:', e);
       setReports([]);
@@ -78,17 +95,48 @@ export default function RTQueuePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyPending, user]);
 
+  // Realtime polling - refresh setiap 10 detik untuk update realtime
+  useEffect(() => {
+    if (!user) return;
+    
+    const interval = setInterval(() => {
+      setIsRefreshing(true);
+      fetchReports(true).finally(() => {
+        setTimeout(() => setIsRefreshing(false), 500);
+      });
+    }, 10000); // Poll setiap 10 detik untuk update realtime
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, onlyPending]);
+
   const updateStatus = async (id: number, status: string) => {
     try {
       await api.patch(`/reports/${id}/status`, { status });
+      const statusLabels: Record<string, string> = {
+        'pending': 'Menunggu',
+        'in_progress': 'Sedang Diproses',
+        'resolved': 'Selesai',
+        'cancelled': 'Dibatalkan'
+      };
+      success(`Status laporan berhasil diubah menjadi "${statusLabels[status] || status}"`);
       fetchReports();
-    } catch {
-      alert('Gagal mengubah status');
+    } catch (err: any) {
+      showError(err.response?.data?.error || 'Gagal mengubah status laporan. Silakan coba lagi.');
     }
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="space-y-6">
+      {/* Realtime indicator */}
+      {isRefreshing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2 text-sm text-blue-700 animate-pulse">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <span>Memperbarui antrian realtime...</span>
+        </div>
+      )}
       <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
         <h3 className="text-xl font-bold text-gray-900">Antrian Laporan Warga</h3>
         <label className="text-sm text-gray-600 flex items-center gap-2 cursor-pointer hover:text-gray-900 transition-colors">
@@ -132,7 +180,7 @@ export default function RTQueuePanel() {
                 </td>
               </tr>
             ) : (
-              reports.map((r) => (
+              paginatedReports.map((r) => (
                 <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-semibold text-gray-900">{r.title}</div>
@@ -170,24 +218,28 @@ export default function RTQueuePanel() {
                     })}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      {r.status === 'pending' && (
-                        <button
-                          onClick={() => updateStatus(r.id, 'in_progress')}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
-                        >
-                          Mulai Proses
-                        </button>
-                      )}
-                      {r.status !== 'resolved' && (
-                        <button
-                          onClick={() => updateStatus(r.id, 'resolved')}
-                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium shadow-sm"
-                        >
-                          Selesaikan
-                        </button>
-                      )}
-                    </div>
+                    {canManageStatus ? (
+                      <div className="flex items-center justify-center gap-2">
+                        {r.status === 'pending' && (
+                          <button
+                            onClick={() => updateStatus(r.id, 'in_progress')}
+                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
+                          >
+                            Mulai Proses
+                          </button>
+                        )}
+                        {r.status !== 'resolved' && (
+                          <button
+                            onClick={() => updateStatus(r.id, 'resolved')}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium shadow-sm"
+                          >
+                            Selesaikan
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-400">Hanya pengurus RT yang dapat mengubah status</p>
+                    )}
                   </td>
                 </tr>
               ))
@@ -195,7 +247,48 @@ export default function RTQueuePanel() {
           </tbody>
         </table>
       </div>
+      
+      {/* Pagination */}
+      {reports.length > itemsPerPage && (
+        <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-4 py-3">
+          <div className="text-sm text-gray-600">
+            Menampilkan {startIndex + 1} - {Math.min(endIndex, reports.length)} dari {reports.length} laporan
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Sebelumnya
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  onClick={() => setPage(pageNum)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                    page === pageNum
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Selanjutnya
+            </button>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   );
 }
 

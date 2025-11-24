@@ -1,18 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from './Toast';
+import { Image as ImageIcon, X, Upload } from 'lucide-react';
 
 export default function CreateReportForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [successOpen, setSuccessOpen] = useState(false);
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [blockchainHash, setBlockchainHash] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { toasts, success, error, removeToast } = useToast();
 
@@ -37,25 +42,94 @@ export default function CreateReportForm() {
     };
   }, []);
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi ukuran file (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        error('Ukuran gambar maksimal 5MB');
+        return;
+      }
+      
+      // Validasi tipe file
+      if (!file.type.startsWith('image/')) {
+        error('File harus berupa gambar');
+        return;
+      }
+      
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImagePreview(null);
+    setImageFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const { data } = await api.post('/reports', { title, description, location });
-      // Broadcast event agar daftar laporan refresh dan auto-scroll top
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('report-created', { detail: { reportId: data.id } })
-        );
+      // Convert image to base64 if exists
+      let imageBase64 = null;
+      if (imageFile) {
+        const reader = new FileReader();
+        imageBase64 = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imageFile);
+        });
       }
+
+      const { data } = await api.post('/reports', { 
+        title, 
+        description, 
+        location,
+        imageUrl: imageBase64 
+      });
+      
+      // Handle location warning/mismatch
+      if (data.locationWarning) {
+        // Tampilkan warning/error untuk location mismatch atau warning lainnya
+        if (data.locationMismatch) {
+          error(data.locationWarning); // Error toast untuk location mismatch
+        } else {
+          // Warning toast untuk location warning lainnya (misalnya lokasi tidak disebutkan)
+          // Note: useToast tidak punya warning method, pakai error dengan style berbeda
+          error(data.locationWarning);
+        }
+      }
+      
+      // Broadcast event agar daftar laporan refresh dan auto-scroll top
+      const txHash = data.blockchain_tx_hash || data.blockchainTxHash;
+        window.dispatchEvent(
+        new CustomEvent('report-created', { 
+          detail: { 
+            reportId: data.id,
+            blockchainTxHash: txHash 
+          } 
+        })
+        );
       setCreatedId(data.id);
+      setBlockchainHash(txHash || null);
       setSuccessOpen(true);
-      success('Laporan berhasil dibuat!');
+      
+      // Tampilkan pesan sukses (blockchain info hanya untuk admin, tidak ditampilkan ke warga)
+      success('Laporan berhasil dibuat! Laporan Anda sedang diproses.');
       // Reset form setelah sukses
       setTitle('');
       setDescription('');
       setLocation('');
+      removeImage();
     } catch (err: any) {
       const errorMessage = err?.response?.data?.error || 'Gagal membuat laporan. Silakan coba lagi.';
       error(errorMessage);
@@ -110,6 +184,51 @@ export default function CreateReportForm() {
           />
         </div>
 
+        {/* Image Upload */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
+            Foto (Opsional)
+          </label>
+          {!imagePreview ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-all"
+            >
+              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 mb-1">Klik untuk upload gambar</p>
+              <p className="text-xs text-gray-400">Maksimal 5MB (JPG, PNG, GIF)</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="relative w-full h-64 rounded-xl overflow-hidden border border-gray-200">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 shadow-lg transition-all"
+                  aria-label="Hapus gambar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                {imageFile?.name} ({((imageFile?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+              </p>
+            </div>
+          )}
+        </div>
+
         <button
           type="submit"
           disabled={loading}
@@ -136,10 +255,11 @@ export default function CreateReportForm() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900">Laporan Terkirim!</h3>
+              <h3 className="text-xl font-bold text-gray-900">Laporan Terkirim! ✅</h3>
               <p className="text-sm text-gray-600 mt-2">
                 Laporan Anda telah diterima dan sedang diproses. Anda bisa melihatnya pada daftar laporan.
               </p>
+              {/* Blockchain info hanya untuk admin, tidak ditampilkan ke warga */}
             </div>
             <div className="mt-6 flex gap-3">
               <button

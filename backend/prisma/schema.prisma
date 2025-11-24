@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique @db.VarChar(255)
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  name           String    @db.VarChar(255)
+  role           String    @db.VarChar(50) // 'warga', 'pengurus', 'admin', etc
+  rtRw           String?   @map("rt_rw") @db.VarChar(50) // 'RT001/RW005'
+  jenisKelamin   String?   @map("jenis_kelamin") @db.VarChar(20) // 'laki_laki' | 'perempuan'
+  faceDescriptor String?   @map("face_descriptor") @db.Text // Encrypted face descriptor (biometric)
+  faceVerified   Boolean   @default(false) @map("face_verified") // Status verifikasi biometrik
+  faceVerifiedAt DateTime? @map("face_verified_at") // Timestamp saat face verified
+  isVerified     Boolean   @default(false) @map("is_verified") // Status verifikasi warga oleh Admin RT/RW
+  verifiedBy     Int?      @map("verified_by") // ID admin yang melakukan verifikasi
+  verifiedAt     DateTime? @map("verified_at") // Timestamp saat diverifikasi
+  verificationNotes String? @map("verification_notes") @db.Text // Catatan verifikasi (jika ditolak)
+  createdBy     Int?      @map("created_by") // ID user yang membuat akun ini (untuk audit trail)
+  rtRwLatitude   Float?   @map("rt_rw_latitude")   // Latitude center RT/RW (untuk validasi lokasi)
+  rtRwLongitude  Float?   @map("rt_rw_longitude")  // Longitude center RT/RW (untuk validasi lokasi)
+  rtRwRadius     Int?     @map("rt_rw_radius")     // Radius dalam meter (untuk circular boundary)
+  rtRwPolygon    Json?    @map("rt_rw_polygon")    // Polygon coordinates untuk boundary tidak bulat
+  createdAt      DateTime  @default(now()) @map("created_at")
+  
+  verifier       User?     @relation("UserVerifier", fields: [verifiedBy], references: [id])
+  verifiedUsers  User[]    @relation("UserVerifier")
+  creator        User?     @relation("UserCreator", fields: [createdBy], references: [id])
+  createdUsers   User[]    @relation("UserCreator")
+
+  reports              Report[]
+  reportStatusHistory  ReportStatusHistory[] @relation("UpdatedBy")
+  bantuan              Bantuan[]
+  chatbotConversations ChatbotConversation[]
+  faceVerificationLogs FaceVerificationLog[]
+
+  @@map("users")
+}
+
+model Report {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  title              String   @db.VarChar(255)
+  description        String   @db.Text
+  category           String?  @db.VarChar(100) // 'infrastruktur', 'sosial', 'administrasi', 'bantuan'
+  urgency            String?  @db.VarChar(50) // 'high', 'medium', 'low'
+  status             String   @default("pending") @db.VarChar(50) // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
+  location           String?  @db.VarChar(255)
+  imageUrl           String?  @map("image_url") @db.Text // URL atau path ke gambar (bisa base64)
+  blockchainTxHash   String?  @map("blockchain_tx_hash") @db.VarChar(255)
+  aiSummary          String?  @map("ai_summary") @db.Text
+  cancellationReason String?  @map("cancellation_reason") @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user                User                  @relation(fields: [userId], references: [id])
+  reportStatusHistory ReportStatusHistory[]
+  aiProcessingLog     AiProcessingLog[]
+
+  @@map("reports")
+}
+
+model ReportStatusHistory {
+  id               Int      @id @default(autoincrement())
+  reportId         Int      @map("report_id")
+  status           String   @db.VarChar(50)
+  notes            String?  @db.Text
+  updatedBy        Int      @map("updated_by")
+  blockchainTxHash String?  @map("blockchain_tx_hash") @db.VarChar(255)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  report  Report @relation(fields: [reportId], references: [id])
+  updater User   @relation("UpdatedBy", fields: [updatedBy], references: [id])
+
+  @@map("report_status_history")
+}
+
+model Bantuan {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @map("user_id")
+  jenisBantuan     String    @map("jenis_bantuan") @db.VarChar(100) // 'sembako', 'tunai', 'kesehatan', dll
+  nominal          Decimal?  @db.Decimal(15, 2)
+  status           String    @default("pending") @db.VarChar(50) // 'pending', 'approved', 'distributed', 'rejected'
+  alasan           String?   @db.Text
+  blockchainTxHash String?   @map("blockchain_tx_hash") @db.VarChar(255)
+  distributedAt    DateTime? @map("distributed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("bantuan")
+}
+
+model AiProcessingLog {
+  id               Int      @id @default(autoincrement())
+  reportId         Int      @map("report_id")
+  originalText     String   @map("original_text") @db.Text
+  aiSummary        String?  @map("ai_summary") @db.Text
+  aiCategory       String?  @map("ai_category") @db.VarChar(100)
+  aiUrgency        String?  @map("ai_urgency") @db.VarChar(50)
+  processingTimeMs Int?     @map("processing_time_ms")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id])
+
+  @@map("ai_processing_log")
+}
+
+model ChatbotConversation {
+  id             Int      @id @default(autoincrement())
+  userId         Int?     @map("user_id")
+  userRole       String?  @map("user_role") @db.VarChar(50)
+  messages       Json // Array of {role, content}
+  detectedIntent String?  @map("detected_intent") @db.VarChar(50) // CREATE_REPORT, ASK_CAPABILITY, etc
+  aiModelUsed    String?  @map("ai_model_used") @db.VarChar(100) // groq, openai, gemini
+  responseTimeMs Int?     @map("response_time_ms")
+  userFeedback   Int?     @map("user_feedback") // 1=good, -1=bad, 0=no feedback
+  feedbackNotes  String?  @map("feedback_notes") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user                User?                 @relation(fields: [userId], references: [id])
+  chatbotTrainingData ChatbotTrainingData[]
+
+  @@map("chatbot_conversations")
+}
+
+model ChatbotTrainingData {
+  id              Int       @id @default(autoincrement())
+  conversationId  Int?      @map("conversation_id")
+  userMessage     String    @map("user_message") @db.Text
+  detectedIntent  String?   @map("detected_intent") @db.VarChar(50)
+  labeledIntent   String?   @map("labeled_intent") @db.VarChar(50) // Correct intent (dari human labeler)
+  entities        Json? // Extracted entities: {problem, location, urgency, etc}
+  labeledEntities Json?     @map("labeled_entities") // Correct entities (dari human labeler)
+  isCorrect       Boolean?  @map("is_correct") // NULL = belum di-label, TRUE = correct, FALSE = incorrect
+  labelerNotes    String?   @map("labeler_notes") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  labeledAt       DateTime? @map("labeled_at")
+
+  conversation ChatbotConversation? @relation(fields: [conversationId], references: [id])
+
+  @@map("chatbot_training_data")
+}
+
+model FaceVerificationLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  verified   Boolean // true = berhasil, false = gagal
+  distance   String   @db.VarChar(20) // Distance value dari comparison
+  threshold  Decimal  @db.Decimal(5, 2) // Threshold yang digunakan
+  confidence String?  @db.VarChar(20) // Confidence percentage
+  context    String?  @db.VarChar(50) // 'login', 'verify_face', 'registration'
+  ipAddress  String?  @map("ip_address") @db.VarChar(45) // IPv4 atau IPv6
+  userAgent  String?  @map("user_agent") @db.Text // Browser/client info
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([verified])
+  @@map("face_verification_logs")
+}

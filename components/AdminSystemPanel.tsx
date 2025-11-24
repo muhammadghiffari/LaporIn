@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import api from '@/lib/api';
+import useAuthStore from '@/store/authStore';
 import {
   Table,
   TableBody,
@@ -49,12 +50,14 @@ const ROLE_LABELS: Record<string, string> = {
   warga: 'Warga',
   pengurus: 'Pengurus',
   sekretaris_rt: 'Sekretaris RT',
+  sekretaris: 'Sekretaris',
   ketua_rt: 'Ketua RT',
   admin_rw: 'Admin RW',
   admin: 'Admin Sistem',
 };
 
 export default function AdminSystemPanel() {
+  const { user } = useAuthStore();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -75,6 +78,27 @@ export default function AdminSystemPanel() {
   });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  
+  // Get allowed roles based on current user role
+  const getAllowedRoles = () => {
+    const currentRole = user?.role || '';
+    
+    if (currentRole === 'admin' || currentRole === 'admin_sistem') {
+      return ['warga', 'pengurus', 'sekretaris_rt', 'sekretaris', 'ketua_rt', 'admin_rw', 'admin'];
+    }
+    if (currentRole === 'admin_rw') {
+      return ['warga', 'pengurus', 'sekretaris_rt', 'sekretaris', 'ketua_rt'];
+    }
+    if (currentRole === 'ketua_rt') {
+      return ['warga', 'pengurus', 'sekretaris_rt'];
+    }
+    if (currentRole === 'sekretaris_rt' || currentRole === 'sekretaris') {
+      return ['warga', 'pengurus'];
+    }
+    return []; // Pengurus dan warga tidak bisa buat user
+  };
+  
+  const allowedRoles = getAllowedRoles();
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -142,7 +166,7 @@ export default function AdminSystemPanel() {
     
     setFormLoading(true);
     try {
-      await api.post('/auth/users', {
+      const response = await api.post('/auth/users', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -150,13 +174,21 @@ export default function AdminSystemPanel() {
         rt_rw: formData.rt_rw || null,
         jenis_kelamin: formData.jenis_kelamin || null,
       });
+      
+      // Show success message
+      if (response.data.message) {
+        alert(response.data.message);
+      } else {
+        alert('User berhasil dibuat!');
+      }
+      
       setOpenDialog(false);
       setFormData({
         name: '',
         email: '',
         password: '',
-        role: 'warga',
-        rt_rw: '',
+        role: allowedRoles[0] || 'warga',
+        rt_rw: user?.rt_rw || '',
         jenis_kelamin: '',
       });
       fetchUsers();
@@ -166,6 +198,16 @@ export default function AdminSystemPanel() {
       setFormLoading(false);
     }
   };
+  
+  const handleOpenDialog = () => {
+    // Auto-fill RT/RW based on current user
+    setFormData({
+      ...formData,
+      rt_rw: user?.rt_rw || '',
+      role: allowedRoles[0] || 'warga', // Set default to first allowed role
+    });
+    setOpenDialog(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -173,14 +215,16 @@ export default function AdminSystemPanel() {
         <Typography variant="h5" className="font-bold text-gray-900">
           Kelola Pengguna
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          className="bg-blue-600 hover:bg-blue-700 rounded-xl px-6 py-2.5"
-        >
-          Buat User Baru
-        </Button>
+        {allowedRoles.length > 0 && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenDialog}
+            className="bg-blue-600 hover:bg-blue-700 rounded-xl px-6 py-2.5"
+          >
+            Buat User Baru
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -239,6 +283,7 @@ export default function AdminSystemPanel() {
             <option value="warga">Warga</option>
             <option value="pengurus">Pengurus</option>
             <option value="sekretaris_rt">Sekretaris RT</option>
+            <option value="sekretaris">Sekretaris</option>
             <option value="ketua_rt">Ketua RT</option>
             <option value="admin_rw">Admin RW</option>
             <option value="admin">Admin Sistem</option>
@@ -416,22 +461,34 @@ export default function AdminSystemPanel() {
                   borderRadius: 2,
                 }}
               >
-                <MenuItem value="warga">Warga</MenuItem>
-                <MenuItem value="pengurus">Pengurus</MenuItem>
-                <MenuItem value="sekretaris_rt">Sekretaris RT</MenuItem>
-                <MenuItem value="ketua_rt">Ketua RT</MenuItem>
-                <MenuItem value="admin_rw">Admin RW</MenuItem>
-                <MenuItem value="admin">Admin Sistem</MenuItem>
+                {allowedRoles.map((roleOption) => (
+                  <MenuItem key={roleOption} value={roleOption}>
+                    {ROLE_LABELS[roleOption] || roleOption}
+                  </MenuItem>
+                ))}
               </Select>
+              {allowedRoles.length === 0 && (
+                <Alert severity="warning" className="mt-2">
+                  Role Anda tidak memiliki permission untuk membuat user baru.
+                </Alert>
+              )}
             </FormControl>
             <TextField
               fullWidth
-              label="RT/RW (opsional)"
-              placeholder="Contoh: RT 01/RW 05"
+              label="RT/RW"
+              placeholder="Contoh: RT001/RW005"
               value={formData.rt_rw}
               onChange={(e) => setFormData({ ...formData, rt_rw: e.target.value })}
               variant="outlined"
               size="medium"
+              required={user?.role !== 'admin' && user?.role !== 'admin_sistem'}
+              helperText={
+                user?.role === 'admin_rw' 
+                  ? `Harus di RT dalam RW ${user?.rt_rw?.split('/')[1] || ''}`
+                  : user?.role === 'ketua_rt' || user?.role === 'sekretaris_rt' || user?.role === 'sekretaris'
+                  ? `Harus sama dengan RT/RW Anda: ${user?.rt_rw || ''}`
+                  : 'Format: RT001/RW005'
+              }
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,

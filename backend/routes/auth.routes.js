@@ -1,88 +1,202 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../database/db');
+const prisma = require('../database/prisma');
+const { authenticate } = require('../middleware/auth');
+const { 
+  encryptFaceDescriptor, 
+  compareFaceDescriptors, 
+  validateFaceDescriptor 
+} = require('../services/faceRecognitionService');
 
 const router = express.Router();
 
-// Stats warga by gender
-router.get('/stats/warga', async (req, res) => {
+// Statistik warga berdasarkan jenis kelamin
+router.get('/stats/warga', authenticate, async (req, res) => {
   try {
-    const { period = 'day' } = req.query; // 'day', 'week', 'month'
+    const { period = 'day', rtFilter, rwFilter } = req.query; // 'day', 'week', 'month', rtFilter untuk Admin RW, rwFilter untuk Super Admin
+    const idUser = req.user?.userId;
+    const roleUser = req.user?.role;
     
-    const total = await pool.query(`SELECT COUNT(*)::int AS total FROM users WHERE role = 'warga'`);
-    const byGender = await pool.query(`
-      SELECT COALESCE(jenis_kelamin, 'tidak_disediakan') AS jenis_kelamin, COUNT(*)::int AS count
-      FROM users
-      WHERE role = 'warga'
-      GROUP BY COALESCE(jenis_kelamin, 'tidak_disediakan')
-    `);
+    // Build filter untuk warga berdasarkan role
+    let wargaFilter = {};
     
-    // Growth data based on period
-    let growthQuery;
-    if (period === 'day') {
-      growthQuery = `
-        SELECT
-          to_char(date_trunc('day', created_at), 'DD Mon YYYY') as label,
-          date_trunc('day', created_at) as date_key,
-          COUNT(*)::int as count
-        FROM users
-        WHERE role = 'warga' AND created_at >= NOW() - INTERVAL '30 days'
-        GROUP BY date_trunc('day', created_at)
-        ORDER BY date_trunc('day', created_at) ASC
-      `;
-    } else if (period === 'week') {
-      growthQuery = `
-        SELECT
-          to_char(date_trunc('week', created_at), 'WW/YYYY') as label,
-          date_trunc('week', created_at) as date_key,
-          COUNT(*)::int as count
-        FROM users
-        WHERE role = 'warga' AND created_at >= NOW() - INTERVAL '12 weeks'
-        GROUP BY date_trunc('week', created_at)
-        ORDER BY date_trunc('week', created_at) ASC
-      `;
-    } else { // month
-      growthQuery = `
-        SELECT
-          to_char(date_trunc('month', created_at), 'Mon YYYY') as label,
-          date_trunc('month', created_at) as date_key,
-          COUNT(*)::int as count
-        FROM users
-        WHERE role = 'warga' AND created_at >= NOW() - INTERVAL '12 months'
-        GROUP BY date_trunc('month', created_at)
-        ORDER BY date_trunc('month', created_at) ASC
-      `;
+    if ((roleUser === 'admin' || roleUser === 'admin_sistem') && rtFilter && rwFilter) {
+      // Super Admin dengan filter RT dan RW
+      wargaFilter = {
+        role: 'warga',
+        rtRw: `${rtFilter}/${rwFilter}`
+      };
+    } else if ((roleUser === 'admin' || roleUser === 'admin_sistem') && rwFilter) {
+      // Super Admin dengan filter RW saja
+      wargaFilter = {
+        role: 'warga',
+        rtRw: {
+          contains: `/${rwFilter}`,
+          mode: 'insensitive'
+        }
+      };
+    } else if (roleUser === 'admin_rw' && rtFilter) {
+      // Admin RW dengan filter RT: ambil RW dari user, lalu filter per RT
+      const user = await prisma.user.findUnique({
+        where: { id: idUser },
+        select: { rtRw: true }
+      });
+      if (user?.rtRw) {
+        const rwPart = user.rtRw.split('/')[1];
+        wargaFilter = {
+          role: 'warga',
+          rtRw: `${rtFilter}/${rwPart}`
+        };
+      } else {
+        wargaFilter = { role: 'warga' };
+      }
+    } else if (roleUser === 'admin_rw' && !rtFilter) {
+      // Admin RW tanpa filter: semua RT dalam RW mereka
+      const user = await prisma.user.findUnique({
+        where: { id: idUser },
+        select: { rtRw: true }
+      });
+      if (user?.rtRw) {
+        const rwPart = user.rtRw.split('/')[1];
+        wargaFilter = {
+          role: 'warga',
+          rtRw: {
+            contains: `/${rwPart}`,
+            mode: 'insensitive'
+          }
+        };
+      } else {
+        wargaFilter = { role: 'warga' };
+      }
+    } else if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(roleUser)) {
+      // Ketua RT/Sekretaris RT: filter berdasarkan RT/RW mereka
+      const user = await prisma.user.findUnique({
+        where: { id: idUser },
+        select: { rtRw: true }
+      });
+      if (user?.rtRw) {
+        wargaFilter = {
+          role: 'warga',
+          rtRw: user.rtRw
+        };
+      } else {
+        wargaFilter = { role: 'warga' };
+      }
+    } else if (roleUser === 'admin' || roleUser === 'admin_sistem') {
+      // Super Admin tanpa filter: semua warga
+      wargaFilter = { role: 'warga' };
+    } else {
+      // Default: semua warga
+      wargaFilter = { role: 'warga' };
     }
     
-    const growth = await pool.query(growthQuery);
+    const totalWarga = await prisma.user.count({
+      where: wargaFilter
+    });
     
-    const totalWarga = total.rows[0].total;
-    const laki = byGender.rows.find(r => r.jenis_kelamin === 'laki_laki')?.count || 0;
-    const perempuan = byGender.rows.find(r => r.jenis_kelamin === 'perempuan')?.count || 0;
+    // Get data jenis kelamin menggunakan Prisma (menggunakan wargaFilter yang sama)
+    const users = await prisma.user.findMany({
+      where: wargaFilter,
+      select: {
+        jenisKelamin: true
+      }
+    });
+    
+    // Count by gender
+    const genderCounts = {};
+    users.forEach(user => {
+      const gender = user.jenisKelamin || 'tidak_disediakan';
+      genderCounts[gender] = (genderCounts[gender] || 0) + 1;
+    });
+    
+    const dataJenisKelamin = Object.entries(genderCounts).map(([jenis_kelamin, count]) => ({
+      jenis_kelamin,
+      count: Number(count)
+    }));
+    
+    // Data pertumbuhan berdasarkan periode menggunakan Prisma
+    const now = new Date();
+    let startDate = new Date();
+    if (period === 'day') {
+      startDate.setDate(now.getDate() - 30);
+    } else if (period === 'week') {
+      startDate.setDate(now.getDate() - 84); // 12 weeks
+    } else { // month
+      startDate.setMonth(now.getMonth() - 12);
+    }
+    
+    const growthUsers = await prisma.user.findMany({
+      where: {
+        ...wargaFilter,
+        createdAt: {
+          gte: startDate
+        }
+      },
+      select: {
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    });
+    
+    // Group by period
+    const growthMap = {};
+    growthUsers.forEach(user => {
+      let key = '';
+      const date = new Date(user.createdAt);
+      if (period === 'day') {
+        key = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      } else if (period === 'week') {
+        const week = Math.ceil(date.getDate() / 7);
+        key = `${week.toString().padStart(2, '0')}/${date.getFullYear()}`;
+      } else { // month
+        key = date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+      }
+      growthMap[key] = (growthMap[key] || 0) + 1;
+    });
+    
+    const dataPertumbuhan = Object.entries(growthMap).map(([label, count]) => ({
+      label,
+      date_key: label, // Simplified
+      count: Number(count)
+    })).sort((a, b) => a.label.localeCompare(b.label));
+    
+    const jumlahLaki = dataJenisKelamin.find(baris => baris.jenis_kelamin === 'laki_laki')?.count || 0;
+    const jumlahPerempuan = dataJenisKelamin.find(baris => baris.jenis_kelamin === 'perempuan')?.count || 0;
     res.json({
       total_warga: totalWarga,
-      by_gender: byGender.rows,
+      by_gender: dataJenisKelamin,
       persentase: {
-        laki_laki: totalWarga ? Math.round((laki / totalWarga) * 100) : 0,
-        perempuan: totalWarga ? Math.round((perempuan / totalWarga) * 100) : 0
+        laki_laki: totalWarga ? Math.round((jumlahLaki / totalWarga) * 100) : 0,
+        perempuan: totalWarga ? Math.round((jumlahPerempuan / totalWarga) * 100) : 0
       },
-      growth: growth.rows,
+      growth: dataPertumbuhan,
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Create user (admin sistem only)
+// Buat user baru (hierarchical: admin, admin_rw, ketua_rt, sekretaris_rt)
 router.post('/users', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.role !== 'admin') {
-      return res.status(403).json({ error: 'Hanya Admin Sistem yang dapat membuat user baru' });
+    const headerAuth = req.headers.authorization;
+    if (!headerAuth) return res.status(401).json({ error: 'Unauthorized' });
+    const token = headerAuth.split(' ')[1];
+    const tokenTerdekripsi = jwt.verify(token, process.env.JWT_SECRET);
+    const creatorRole = tokenTerdekripsi.role;
+    const creatorId = tokenTerdekripsi.userId;
+    
+    // Import helper functions
+    const { canCreateRole, validateRtRwBoundary, shouldAutoVerify } = require('../utils/userHierarchy');
+    
+    // Cek apakah creator bisa membuat user
+    if (!canCreateRole(creatorRole, req.body.role)) {
+      return res.status(403).json({ 
+        error: `Role ${creatorRole} tidak memiliki permission untuk membuat user dengan role ${req.body.role}` 
+      });
     }
     
     const { email, password, name, role, rt_rw, jenis_kelamin } = req.body;
@@ -92,73 +206,323 @@ router.post('/users', async (req, res) => {
     }
     
     // Validasi role
-    const validRoles = ['warga', 'pengurus', 'sekretaris_rt', 'ketua_rt', 'admin_rw', 'admin'];
-    if (!validRoles.includes(role)) {
+    const daftarRoleValid = ['warga', 'pengurus', 'sekretaris_rt', 'sekretaris', 'ketua_rt', 'admin_rw', 'admin'];
+    if (!daftarRoleValid.includes(role)) {
       return res.status(400).json({ error: 'Role tidak valid' });
     }
     
-    // Cek email sudah ada
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
+    // Get creator data untuk validasi RT/RW boundary
+    const creator = await prisma.user.findUnique({
+      where: { id: creatorId },
+      select: { rtRw: true, role: true }
+    });
+    
+    if (!creator) {
+      return res.status(404).json({ error: 'Creator user tidak ditemukan' });
+    }
+    
+    // Validasi RT/RW boundary
+    const rtRwValidation = validateRtRwBoundary(creatorRole, creator.rtRw, rt_rw);
+    if (!rtRwValidation.valid) {
+      return res.status(403).json({ error: rtRwValidation.error });
+    }
+    
+    // Cek apakah email sudah terdaftar
+    const userTerdaftar = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true }
+    });
+    if (userTerdaftar) {
       return res.status(400).json({ error: 'Email sudah terdaftar' });
     }
     
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hashPassword = await bcrypt.hash(password, 10);
     
-    // Insert user
-    const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name, role, rt_rw, jenis_kelamin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, name, role, rt_rw, jenis_kelamin, created_at',
-      [email, passwordHash, name, role, rt_rw || null, jenis_kelamin || null]
-    );
+    // Tentukan auto-verification
+    const autoVerified = shouldAutoVerify(creatorRole, role);
     
-    res.json({ success: true, user: result.rows[0] });
+    // Buat user baru dengan createdBy dan auto-verification
+    const userBaru = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: hashPassword,
+        name,
+        role,
+        rtRw: rt_rw || null,
+        jenisKelamin: jenis_kelamin || null,
+        createdBy: creatorId, // Audit trail
+        isVerified: autoVerified, // Auto-verify jika dibuat oleh atasan
+        verifiedBy: autoVerified ? creatorId : null,
+        verifiedAt: autoVerified ? new Date() : null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        jenisKelamin: true,
+        isVerified: true,
+        createdAt: true,
+        createdBy: true
+      }
+    });
+    
+    console.log(`[User Creation] User ${creatorId} (${creatorRole}) created user ${userBaru.id} (${role}) - Auto-verified: ${autoVerified}`);
+    
+    res.json({ 
+      success: true, 
+      message: autoVerified ? 'User berhasil dibuat dan otomatis diverifikasi' : 'User berhasil dibuat',
+      user: {
+        id: userBaru.id,
+        email: userBaru.email,
+        name: userBaru.name,
+        role: userBaru.role,
+        rt_rw: userBaru.rtRw,
+        jenis_kelamin: userBaru.jenisKelamin,
+        is_verified: userBaru.isVerified,
+        created_at: userBaru.createdAt,
+        created_by: userBaru.createdBy
+      }
+    });
   } catch (error) {
+    console.error('[User Creation] Error:', error);
     res.status(400).json({ error: error.message });
   }
 });
 
-// Register
+// Registrasi user baru (WAJIB dengan face descriptor)
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role, rt_rw, jenis_kelamin } = req.body;
+    const { email, password, name, role, rt_rw, jenis_kelamin, faceDescriptor } = req.body;
+    
+    // WAJIB face descriptor untuk registrasi
+    if (!faceDescriptor) {
+      return res.status(400).json({ error: 'Face descriptor is required for registration' });
+    }
     
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const hashPassword = await bcrypt.hash(password, 10);
     
-    // Insert user
-    const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name, role, rt_rw, jenis_kelamin) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, name, role, rt_rw, jenis_kelamin',
-      [email, passwordHash, name, role, rt_rw, jenis_kelamin]
-    );
+    // Validate dan encrypt face descriptor (WAJIB)
+    if (!validateFaceDescriptor(faceDescriptor)) {
+      return res.status(400).json({ error: 'Invalid face descriptor format' });
+    }
+    const encryptedFaceDescriptor = encryptFaceDescriptor(faceDescriptor);
+    
+    // Buat user baru (dengan face descriptor wajib)
+    const userBaru = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: hashPassword,
+        name,
+        role,
+        rtRw: rt_rw || null,
+        jenisKelamin: jenis_kelamin || null,
+        faceDescriptor: encryptedFaceDescriptor, // Wajib ada
+        faceVerified: true, // Auto verified saat registrasi
+        faceVerifiedAt: new Date()
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        jenisKelamin: true,
+        faceVerified: true
+      }
+    });
     
     const token = jwt.sign(
-      { userId: result.rows[0].id, role: result.rows[0].role },
+      { userId: userBaru.id, role: userBaru.role },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
     
-    res.json({ token, user: result.rows[0] });
+    res.json({ 
+      token, 
+      user: {
+        id: userBaru.id,
+        email: userBaru.email,
+        name: userBaru.name,
+        role: userBaru.role,
+        rt_rw: userBaru.rtRw,
+        jenis_kelamin: userBaru.jenisKelamin,
+        face_verified: userBaru.faceVerified
+      },
+      faceRegistered: !!encryptedFaceDescriptor
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Login
+// Save face descriptor untuk user yang sudah terdaftar
+router.post('/register-face', authenticate, async (req, res) => {
+  try {
+    const { faceDescriptor } = req.body;
+    const userId = req.user.userId;
+    
+    if (!faceDescriptor) {
+      return res.status(400).json({ error: 'Face descriptor is required' });
+    }
+    
+    if (!validateFaceDescriptor(faceDescriptor)) {
+      return res.status(400).json({ error: 'Invalid face descriptor format' });
+    }
+    
+    // Encrypt face descriptor
+    const encryptedFaceDescriptor = encryptFaceDescriptor(faceDescriptor);
+    
+    // Update user dengan face descriptor
+    const userUpdated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        faceDescriptor: encryptedFaceDescriptor,
+        faceVerified: true,
+        faceVerifiedAt: new Date()
+      },
+      select: {
+        id: true,
+        email: true,
+        faceVerified: true,
+        faceVerifiedAt: true
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Face descriptor registered successfully',
+      face_verified: userUpdated.faceVerified,
+      face_verified_at: userUpdated.faceVerifiedAt
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Login user (dengan password atau face verification)
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, faceDescriptor } = req.body;
     
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        passwordHash: true,
+        faceDescriptor: true,
+        faceVerified: true,
+        isVerified: true // Tambahkan isVerified untuk validasi
+      }
+    });
     
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    const user = result.rows[0];
-    const isValid = await bcrypt.compare(password, user.password_hash);
+    // VALIDASI: Warga yang belum diverifikasi tidak bisa login
+    if (user.role === 'warga' && !user.isVerified) {
+      return res.status(403).json({ 
+        error: 'Akun Anda belum diverifikasi oleh Admin RT/RW. Silakan hubungi Admin RT/RW untuk melakukan verifikasi akun Anda terlebih dahulu.',
+        requiresVerification: true,
+        isVerified: false
+      });
+    }
     
-    if (!isValid) {
+    // Login dengan face verification (jika user sudah punya face descriptor)
+    if (faceDescriptor && user.faceDescriptor) {
+      if (!validateFaceDescriptor(faceDescriptor)) {
+        return res.status(400).json({ error: 'Invalid face descriptor format' });
+      }
+      
+      const comparison = compareFaceDescriptors(user.faceDescriptor, faceDescriptor);
+      
+      // Track verification attempt ke database
+      const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'] || null;
+      
+      try {
+        await prisma.faceVerificationLog.create({
+          data: {
+            userId: user.id,
+            verified: comparison.isMatch,
+            distance: comparison.distance,
+            threshold: comparison.threshold,
+            confidence: comparison.confidence || null,
+            context: 'login',
+            ipAddress: ipAddress,
+            userAgent: userAgent
+          }
+        });
+        
+        console.log(`[Face Verification Login] User ${user.id} (${user.email}) - Verified: ${comparison.isMatch}, Distance: ${comparison.distance}, Confidence: ${comparison.confidence}%`);
+      } catch (logError) {
+        console.error('[Face Verification Login] Failed to log verification:', logError);
+        // Jangan gagal request karena logging error
+      }
+      
+      if (!comparison.isMatch) {
+        return res.status(401).json({ 
+          error: 'Face verification failed', 
+          details: {
+            distance: comparison.distance,
+            threshold: comparison.threshold,
+            confidence: comparison.confidence
+          }
+        });
+      }
+      
+      // VALIDASI: Warga yang belum diverifikasi tidak bisa login (face verification)
+      if (user.role === 'warga' && !user.isVerified) {
+        return res.status(403).json({ 
+          error: 'Akun Anda belum diverifikasi oleh Admin RT/RW. Silakan hubungi Admin RT/RW untuk melakukan verifikasi akun Anda terlebih dahulu.',
+          requiresVerification: true,
+          isVerified: false
+        });
+      }
+      
+      // Face verification successful
+      const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      return res.json({ 
+        token, 
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          rt_rw: user.rtRw
+        },
+        loginMethod: 'face',
+        faceMatch: {
+          distance: comparison.distance,
+          confidence: comparison.confidence
+        }
+      });
+    }
+    
+    // Login dengan password (traditional)
+    if (!password) {
+      return res.status(400).json({ 
+        error: 'Password or face descriptor is required',
+        hasFaceRegistered: !!user.faceDescriptor
+      });
+    }
+    
+    const passwordValid = await bcrypt.compare(password, user.passwordHash);
+    
+    if (!passwordValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
@@ -168,6 +532,16 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
     
+    // Check if user has face descriptor (wajib verifikasi wajah jika ada)
+    const hasFaceDescriptor = Boolean(user.faceDescriptor) === true;
+    const hasFaceVerified = Boolean(user.faceVerified) === true;
+    
+    console.log(`[Login] User ${user.email}:`, {
+      hasFaceDescriptor,
+      hasFaceVerified,
+      faceDescriptorLength: user.faceDescriptor ? user.faceDescriptor.length : 0
+    });
+    
     res.json({ 
       token, 
       user: {
@@ -175,84 +549,205 @@ router.post('/login', async (req, res) => {
         email: user.email,
         name: user.name,
         role: user.role,
-        rt_rw: user.rt_rw
-      }
+        rt_rw: user.rtRw
+      },
+      loginMethod: 'password',
+      hasFaceRegistered: hasFaceDescriptor, // true jika punya face descriptor
+      requiresFaceVerification: hasFaceDescriptor // WAJIB verifikasi wajah jika ada face descriptor
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Hapus user (role-guarded). Untuk keamanan, batasi ke admin/admin_rw/ketua_rt/sekretaris_rt.
+// Face verification saja (untuk user yang sudah login)
+router.post('/verify-face', authenticate, async (req, res) => {
+  try {
+    const { faceDescriptor } = req.body;
+    const userId = req.user.userId;
+    
+    if (!faceDescriptor) {
+      return res.status(400).json({ error: 'Face descriptor is required' });
+    }
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        faceDescriptor: true,
+        faceVerified: true
+      }
+    });
+    
+    if (!user || !user.faceDescriptor) {
+      return res.status(400).json({ error: 'Face descriptor not registered for this user' });
+    }
+    
+    if (!validateFaceDescriptor(faceDescriptor)) {
+      return res.status(400).json({ error: 'Invalid face descriptor format' });
+    }
+    
+    const comparison = compareFaceDescriptors(user.faceDescriptor, faceDescriptor);
+    
+    // Track verification attempt ke database
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'] || null;
+    
+    try {
+      await prisma.faceVerificationLog.create({
+        data: {
+          userId: userId,
+          verified: comparison.isMatch,
+          distance: comparison.distance,
+          threshold: comparison.threshold,
+          confidence: comparison.confidence || null,
+          context: 'verify_face',
+          ipAddress: ipAddress,
+          userAgent: userAgent
+        }
+      });
+      
+      console.log(`[Face Verification] User ${userId} - Verified: ${comparison.isMatch}, Distance: ${comparison.distance}, Confidence: ${comparison.confidence}%`);
+    } catch (logError) {
+      console.error('[Face Verification] Failed to log verification:', logError);
+      // Jangan gagal request karena logging error
+    }
+    
+    res.json({
+      verified: comparison.isMatch,
+      distance: comparison.distance,
+      threshold: comparison.threshold,
+      confidence: comparison.confidence
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get current user (untuk validate token)
+// GET /api/auth/me - Get current user info
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        jenisKelamin: true,
+        faceVerified: true,
+        isVerified: true,
+        verifiedAt: true
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      rt_rw: user.rtRw,
+      jenis_kelamin: user.jenisKelamin,
+      face_verified: user.faceVerified,
+      is_verified: user.isVerified,
+      verified_at: user.verifiedAt
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Hapus user (dibatasi berdasarkan role). Untuk keamanan, hanya admin/admin_rw/ketua_rt/sekretaris_rt.
 router.delete('/users/:id', async (req, res) => {
   try {
-    // Simple guard: require Authorization header exists and role allowed
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const allowed = ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt'];
-    if (!allowed.includes(decoded.role)) {
+    // Validasi: header Authorization harus ada dan role diizinkan
+    const headerAuth = req.headers.authorization;
+    if (!headerAuth) return res.status(401).json({ error: 'Unauthorized' });
+    const token = headerAuth.split(' ')[1];
+    const tokenTerdekripsi = jwt.verify(token, process.env.JWT_SECRET);
+    const daftarRoleDiizinkan = ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'];
+    if (!daftarRoleDiizinkan.includes(tokenTerdekripsi.role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     const { id } = req.params;
-    // Prevent deleting other admins unless admin sistem
-    if (decoded.role !== 'admin') {
-      const target = await pool.query('SELECT role FROM users WHERE id = $1', [id]);
-      if (target.rows[0]?.role === 'admin') {
+    // Cegah menghapus admin lain kecuali admin sistem
+    if (tokenTerdekripsi.role !== 'admin') {
+      const userTarget = await prisma.user.findUnique({
+        where: { id: parseInt(id) },
+        select: { role: true }
+      });
+      if (userTarget?.role === 'admin') {
         return res.status(403).json({ error: 'Cannot delete admin' });
       }
     }
-    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    await prisma.user.delete({
+      where: { id: parseInt(id) }
+    });
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// List users (admin sistem only)
+// Daftar semua users (hanya admin sistem)
 router.get('/users', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.role !== 'admin') {
+    const headerAuth = req.headers.authorization;
+    if (!headerAuth) return res.status(401).json({ error: 'Unauthorized' });
+    const token = headerAuth.split(' ')[1];
+    const tokenTerdekripsi = jwt.verify(token, process.env.JWT_SECRET);
+    if (tokenTerdekripsi.role !== 'admin') {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     const { role, search, limit = 50, offset = 0 } = req.query;
-    const params = [];
-    let q =
-      'SELECT id, email, name, role, rt_rw, jenis_kelamin, created_at FROM users WHERE 1=1';
-    let countQ = 'SELECT COUNT(*) FROM users WHERE 1=1';
-    let idx = 1;
-    const countParams = [];
-    let countIdx = 1;
     
+    const kondisiWhere = {};
     if (role) {
-      q += ` AND role = $${idx++}`;
-      params.push(role);
-      countQ += ` AND role = $${countIdx++}`;
-      countParams.push(role);
+      kondisiWhere.role = role;
     }
     if (search) {
-      q += ` AND (LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx})`;
-      params.push(`%${String(search).toLowerCase()}%`);
-      idx++;
-      countQ += ` AND (LOWER(name) LIKE $${countIdx} OR LOWER(email) LIKE $${countIdx})`;
-      countParams.push(`%${String(search).toLowerCase()}%`);
-      countIdx++;
+      kondisiWhere.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } }
+      ];
     }
-    q += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
-    params.push(Number(limit), Number(offset));
     
-    const result = await pool.query(q, params);
-    const countResult = await pool.query(countQ, countParams);
-    const total = parseInt(countResult.rows[0].count);
+    const [daftarUser, totalUser] = await Promise.all([
+      prisma.user.findMany({
+        where: kondisiWhere,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          rtRw: true,
+          jenisKelamin: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'desc' },
+        take: parseInt(limit),
+        skip: parseInt(offset)
+      }),
+      prisma.user.count({ where: kondisiWhere })
+    ]);
     
     res.json({
-      data: result.rows,
-      total,
+      data: daftarUser.map(user => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        rt_rw: user.rtRw,
+        jenis_kelamin: user.jenisKelamin,
+        created_at: user.createdAt
+      })),
+      total: totalUser,
       page: Math.floor(Number(offset) / Number(limit)) + 1,
       limit: Number(limit),
     });
@@ -261,5 +756,177 @@ router.get('/users', async (req, res) => {
   }
 });
 
-module.exports = router;
+// GET /api/auth/warga/pending-verification - List warga yang belum diverifikasi (untuk Admin RT/RW)
+router.get('/warga/pending-verification', authenticate, async (req, res) => {
+  try {
+    const idUser = req.user.userId;
+    const roleUser = req.user.role;
+    
+    // Hanya Admin RT/RW, Ketua RT, Sekretaris RT yang bisa akses
+    const allowedRoles = ['admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'admin', 'admin_sistem'];
+    if (!allowedRoles.includes(roleUser)) {
+      return res.status(403).json({ error: 'Akses ditolak. Hanya Admin RT/RW yang dapat mengakses endpoint ini.' });
+    }
+    
+    // Get user RT/RW untuk filter
+    const user = await prisma.user.findUnique({
+      where: { id: idUser },
+      select: { rtRw: true }
+    });
+    
+    // Build filter: warga yang belum diverifikasi di RT/RW yang sama
+    let whereClause = {
+      role: 'warga',
+      isVerified: false
+    };
+    
+    // Filter berdasarkan RT/RW (kecuali Super Admin)
+    if (roleUser !== 'admin' && roleUser !== 'admin_sistem' && user?.rtRw) {
+      whereClause.rtRw = user.rtRw;
+    }
+    
+    const pendingWarga = await prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        rtRw: true,
+        jenisKelamin: true,
+        createdAt: true,
+        faceVerified: true,
+        faceDescriptor: true, // Tambahkan untuk cek apakah ada face descriptor
+        verifiedBy: true,
+        verifiedAt: true,
+        verificationNotes: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    // Format response dengan field yang benar
+    const formattedWarga = pendingWarga.map(warga => ({
+      id: warga.id,
+      email: warga.email,
+      name: warga.name,
+      rt_rw: warga.rtRw || null, // Pastikan null jika tidak ada
+      jenis_kelamin: warga.jenisKelamin || null, // Pastikan null jika tidak ada
+      created_at: warga.createdAt.toISOString(), // Convert ke ISO string untuk format yang benar
+      face_verified: warga.faceVerified || (warga.faceDescriptor ? true : false), // Cek faceVerified atau faceDescriptor
+      verified_by: warga.verifiedBy || null,
+      verified_at: warga.verifiedAt ? warga.verifiedAt.toISOString() : null,
+      verification_notes: warga.verificationNotes || null
+    }));
+    
+    res.json({
+      pendingWarga: formattedWarga,
+      total: formattedWarga.length
+    });
+  } catch (error) {
+    console.error('Error fetching pending verification:', error);
+    res.status(500).json({ error: 'Gagal mengambil daftar warga yang perlu diverifikasi' });
+  }
+});
 
+// POST /api/auth/warga/:userId/verify - Verifikasi warga (approve/reject)
+router.post('/warga/:userId/verify', authenticate, async (req, res) => {
+  try {
+    const idUser = req.user.userId;
+    const roleUser = req.user.role;
+    const { userId } = req.params;
+    const { approved, notes } = req.body;
+    
+    // Hanya Admin RT/RW, Ketua RT, Sekretaris RT yang bisa verifikasi
+    const allowedRoles = ['admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'admin', 'admin_sistem'];
+    if (!allowedRoles.includes(roleUser)) {
+      return res.status(403).json({ error: 'Akses ditolak. Hanya Admin RT/RW yang dapat melakukan verifikasi.' });
+    }
+    
+    if (typeof approved !== 'boolean') {
+      return res.status(400).json({ error: 'Parameter "approved" harus boolean (true/false)' });
+    }
+    
+    // Get warga yang akan diverifikasi
+    const warga = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        isVerified: true
+      }
+    });
+    
+    if (!warga) {
+      return res.status(404).json({ error: 'Warga tidak ditemukan' });
+    }
+    
+    if (warga.role !== 'warga') {
+      return res.status(400).json({ error: 'Hanya warga yang dapat diverifikasi' });
+    }
+    
+    // Cek apakah warga sudah diverifikasi
+    if (warga.isVerified && approved) {
+      return res.status(400).json({ error: 'Warga ini sudah diverifikasi sebelumnya' });
+    }
+    
+    // Get verifier RT/RW untuk validasi
+    const verifier = await prisma.user.findUnique({
+      where: { id: idUser },
+      select: { rtRw: true }
+    });
+    
+    // Validasi: Admin RT/RW hanya bisa verifikasi warga di RT/RW mereka (kecuali Super Admin)
+    if (roleUser !== 'admin' && roleUser !== 'admin_sistem') {
+      if (!verifier?.rtRw || !warga.rtRw || verifier.rtRw !== warga.rtRw) {
+        return res.status(403).json({ 
+          error: 'Anda hanya dapat memverifikasi warga di RT/RW Anda sendiri',
+          yourRtRw: verifier?.rtRw,
+          wargaRtRw: warga.rtRw
+        });
+      }
+    }
+    
+    // Update status verifikasi
+    const updatedWarga = await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: {
+        isVerified: approved,
+        verifiedBy: approved ? idUser : null,
+        verifiedAt: approved ? new Date() : null,
+        verificationNotes: notes || null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        rtRw: true,
+        isVerified: true,
+        verifiedBy: true,
+        verifiedAt: true,
+        verificationNotes: true,
+        verifier: {
+          select: {
+            id: true,
+            name: true,
+            role: true
+          }
+        }
+      }
+    });
+    
+    console.log(`[User Verification] User ${idUser} (${roleUser}) ${approved ? 'approved' : 'rejected'} verification for warga ${userId} (${warga.email})`);
+    
+    res.json({
+      success: true,
+      message: approved ? 'Warga berhasil diverifikasi' : 'Verifikasi warga ditolak',
+      warga: updatedWarga
+    });
+  } catch (error) {
+    console.error('Error verifying warga:', error);
+    res.status(500).json({ error: 'Gagal melakukan verifikasi warga' });
+  }
+});
+
+module.exports = router;

@@ -4,6 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
 import Link from 'next/link';
+import FaceCapture from '@/components/FaceCapture';
+import api from '@/lib/api';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/Toast';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -12,29 +16,60 @@ export default function RegisterPage() {
   const [rtRw, setRtRw] = useState('RT001/RW005');
   const [jenisKelamin, setJenisKelamin] = useState('');
   const [error, setError] = useState('');
+  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
+  const [showFaceCapture, setShowFaceCapture] = useState(true); // Auto show untuk wajib
+  const [faceError, setFaceError] = useState('');
   const { register } = useAuthStore();
   const router = useRouter();
+  const { toasts, success, error: showError, removeToast } = useToast();
+
+  const handleFaceCaptured = (descriptor: number[]) => {
+    setFaceDescriptor(descriptor);
+    setFaceError('');
+    setShowFaceCapture(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const result = await register({
-      email,
-      password,
-      name,
-      role: 'warga',
-      rt_rw: rtRw,
-      jenis_kelamin: jenisKelamin,
-    });
-    if (result.success) {
-      router.push('/dashboard');
-    } else {
-      setError(result.error || 'Registrasi gagal');
+    setFaceError('');
+    
+    // WAJIB face recognition untuk registrasi
+    if (!faceDescriptor) {
+      const errorMsg = 'Wajib mendaftarkan wajah untuk keamanan akun';
+      setFaceError(errorMsg);
+      showError(errorMsg);
+      setShowFaceCapture(true);
+      return;
+    }
+    
+    try {
+      // Register dengan face descriptor (WAJIB)
+      const response = await api.post('/auth/register', {
+        email,
+        password,
+        name,
+        role: 'warga',
+        rt_rw: rtRw,
+        jenis_kelamin: jenisKelamin,
+        faceDescriptor: JSON.stringify(faceDescriptor), // Wajib ada
+      });
+
+      success('Registrasi berhasil! Silakan login dengan email dan password Anda.');
+      // Redirect ke login dengan success message
+      setTimeout(() => {
+        router.push('/login?registered=true&email=' + encodeURIComponent(email));
+      }, 1500);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Gagal mendaftar. Email mungkin sudah terdaftar.';
+      setError(errorMsg);
+      showError(errorMsg);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in">
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl mb-4 shadow-lg">
@@ -125,11 +160,51 @@ export default function RegisterPage() {
             </select>
           </div>
 
+          {/* Face Recognition Section (WAJIB) */}
+          <div className="border-t border-gray-200 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-1">
+                  Face Recognition <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-gray-500">
+                  Wajib mendaftarkan wajah untuk keamanan dan verifikasi akun
+                </p>
+              </div>
+              {faceDescriptor && (
+                <div className="px-3 py-1.5 text-xs rounded-lg font-medium bg-green-100 text-green-800">
+                  ✓ Terdaftar
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <FaceCapture
+                onFaceCaptured={handleFaceCaptured}
+                onError={(error) => setFaceError(error)}
+                autoStart={!faceDescriptor}
+                hideAfterCapture={false}
+              />
+              {faceError && (
+                <p className="mt-2 text-xs text-red-600 font-medium">{faceError}</p>
+              )}
+              {faceDescriptor && (
+                <p className="mt-2 text-xs text-green-600 font-medium flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Face descriptor berhasil direkam - Siap untuk registrasi
+                </p>
+              )}
+            </div>
+          </div>
+
           <button
             type="submit"
-            className="w-full flex justify-center items-center gap-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-semibold"
+            disabled={!faceDescriptor}
+            className="w-full flex justify-center items-center gap-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Daftar
+            {faceDescriptor ? 'Daftar' : 'Daftar Wajah Terlebih Dahulu'}
           </button>
         </form>
 

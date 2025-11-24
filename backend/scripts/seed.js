@@ -1,9 +1,9 @@
-/* Seed initial users for LaporIn */
+/* Seed data awal untuk LaporIn */
 const bcrypt = require('bcryptjs');
-const pool = require('../database/db');
+const prisma = require('../database/prisma');
 
-async function run() {
-  const users = [
+async function jalankan() {
+  const daftarUser = [
     {
       email: 'adminsistem@example.com',
       name: 'Admin Sistem',
@@ -46,11 +46,11 @@ async function run() {
     },
   ];
 
-  // Generate 100 warga accounts with variasi RT/RW dan gender
+  // Generate 100 akun warga dengan variasi RT/RW dan jenis kelamin
   for (let i = 1; i <= 100; i++) {
     const rt = String(((i - 1) % 5) + 1).padStart(3, '0'); // RT001-RT005
     const rw = '005';
-    users.push({
+    daftarUser.push({
       email: `warga${i}@example.com`,
       name: `Warga ${i}`,
       role: 'warga',
@@ -61,28 +61,39 @@ async function run() {
   }
 
   try {
-    for (const u of users) {
-      const hash = await bcrypt.hash(u.password, 10);
-      await pool.query(
-        `INSERT INTO users (email, password_hash, name, role, rt_rw, jenis_kelamin)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (email) DO NOTHING`,
-        [u.email, hash, u.name, u.role, u.rt_rw, u.jenis_kelamin]
-      );
-      console.log(`Seeded user: ${u.email} (${u.role})`);
+    for (const user of daftarUser) {
+      const hashPassword = await bcrypt.hash(user.password, 10);
+      await prisma.user.upsert({
+        where: { email: user.email },
+        update: {},
+        create: {
+          email: user.email,
+          passwordHash: hashPassword,
+          name: user.name,
+          role: user.role,
+          rtRw: user.rt_rw,
+          jenisKelamin: user.jenis_kelamin
+        }
+      });
+      console.log(`Seeded user: ${user.email} (${user.role})`);
     }
 
-    // Fetch some user ids for reports
-    const wargaRes = await pool.query(
-      `SELECT id, rt_rw FROM users WHERE role = 'warga' ORDER BY id LIMIT 100`
-    );
-    const pengurusRes = await pool.query(
-      `SELECT id FROM users WHERE role IN ('pengurus','sekretaris_rt','ketua_rt','admin_rw','admin') ORDER BY id LIMIT 1`
-    );
-    const pengurusId = pengurusRes.rows[0]?.id || wargaRes.rows[0]?.id;
+    // Ambil beberapa ID user untuk laporan
+    const daftarWarga = await prisma.user.findMany({
+      where: { role: 'warga' },
+      select: { id: true, rtRw: true },
+      orderBy: { id: 'asc' },
+      take: 100
+    });
+    const pengurus = await prisma.user.findFirst({
+      where: { role: { in: ['pengurus', 'sekretaris_rt', 'ketua_rt', 'admin_rw', 'admin'] } },
+      select: { id: true },
+      orderBy: { id: 'asc' }
+    });
+    const idPengurus = pengurus?.id || daftarWarga[0]?.id;
 
-    // Seed reports across a date range up to 2025-11-17
-    const titles = [
+    // Seed laporan dalam rentang tanggal hingga 2025-11-17
+    const daftarJudul = [
       'Selokan mampet di Blok C3',
       'Lampu jalan mati',
       'Sampah menumpuk di TPS',
@@ -94,93 +105,101 @@ async function run() {
       'Gangguan listrik sebagian blok',
       'Saluran air bocor'
     ];
-    const categories = ['infrastruktur', 'sosial', 'administrasi', 'bantuan'];
-    const urgencies = ['low', 'medium', 'high'];
-    const statuses = ['pending', 'in_progress', 'resolved'];
+    const daftarKategori = ['infrastruktur', 'sosial', 'administrasi', 'bantuan'];
+    const daftarUrgensi = ['low', 'medium', 'high'];
+    const daftarStatus = ['pending', 'in_progress', 'resolved'];
 
-    const end = new Date('2025-11-17T10:00:00.000Z');
-    const start = new Date(end);
-    start.setDate(end.getDate() - 28); // 4 minggu ke belakang
+    const tanggalAkhir = new Date('2025-11-17T10:00:00.000Z');
+    const tanggalAwal = new Date(tanggalAkhir);
+    tanggalAwal.setDate(tanggalAkhir.getDate() - 28); // 4 minggu ke belakang
 
-    let createdCount = 0;
-    for (let i = 0; i < 60 && wargaRes.rows.length; i++) {
-      const warga = wargaRes.rows[i % wargaRes.rows.length];
-      const title = titles[i % titles.length];
-      const description =
+    let jumlahDibuat = 0;
+    for (let i = 0; i < 60 && daftarWarga.length; i++) {
+      const warga = daftarWarga[i % daftarWarga.length];
+      const judul = daftarJudul[i % daftarJudul.length];
+      const deskripsi =
         'Laporan otomatis (seed) untuk keperluan demo. Mohon tindak lanjut sesuai prioritas.';
-      const location = warga.rt_rw || 'RT001/RW005';
-      const category = categories[i % categories.length];
-      const urgency = urgencies[i % urgencies.length];
-      const status = statuses[i % statuses.length];
-      const createdAt = new Date(start.getTime() + ((end - start) / 60) * i);
+      const lokasi = warga.rtRw || 'RT001/RW005';
+      const kategori = daftarKategori[i % daftarKategori.length];
+      const urgensi = daftarUrgensi[i % daftarUrgensi.length];
+      const status = daftarStatus[i % daftarStatus.length];
+      const waktuDibuat = new Date(tanggalAwal.getTime() + ((tanggalAkhir - tanggalAwal) / 60) * i);
 
-      const reportInsert = await pool.query(
-        `INSERT INTO reports (user_id, title, description, location, category, urgency, ai_summary, status, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING id`,
-        [
-          warga.id,
-          title,
-          description,
-          location,
-          category,
-          urgency,
-          `Ringkasan AI: ${title}`,
+      const laporan = await prisma.report.create({
+        data: {
+          userId: warga.id,
+          title: judul,
+          description: deskripsi,
+          location: lokasi,
+          category: kategori,
+          urgency: urgensi,
+          aiSummary: `Ringkasan AI: ${judul}`,
           status,
-          createdAt
-        ]
-      );
-      const reportId = reportInsert.rows[0].id;
+          createdAt: waktuDibuat,
+          updatedAt: waktuDibuat
+        }
+      });
+      const idLaporan = laporan.id;
 
-      // Initial history: pending at createdAt
-      await pool.query(
-        `INSERT INTO report_status_history (report_id, status, notes, updated_by, created_at)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [reportId, 'pending', 'Laporan dibuat', warga.id, createdAt]
-      );
+      // Riwayat awal: pending saat dibuat
+      await prisma.reportStatusHistory.create({
+        data: {
+          reportId: idLaporan,
+          status: 'pending',
+          notes: 'Laporan dibuat',
+          updatedBy: warga.id,
+          createdAt: waktuDibuat
+        }
+      });
 
-      // If moved forward, add additional history
+      // Jika status sudah berubah, tambahkan riwayat tambahan
       if (status === 'in_progress' || status === 'resolved') {
-        const t1 = new Date(createdAt.getTime() + 1000 * 60 * 60 * 6);
-        await pool.query(
-          `INSERT INTO report_status_history (report_id, status, notes, updated_by, created_at)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [reportId, 'in_progress', 'Penanganan dimulai', pengurusId, t1]
-        );
+        const waktuInProgress = new Date(waktuDibuat.getTime() + 1000 * 60 * 60 * 6);
+        await prisma.reportStatusHistory.create({
+          data: {
+            reportId: idLaporan,
+            status: 'in_progress',
+            notes: 'Penanganan dimulai',
+            updatedBy: idPengurus,
+            createdAt: waktuInProgress
+          }
+        });
       }
       if (status === 'resolved') {
-        const t2 = new Date(createdAt.getTime() + 1000 * 60 * 60 * 24);
-        await pool.query(
-          `INSERT INTO report_status_history (report_id, status, notes, updated_by, created_at)
-           VALUES ($1,$2,$3,$4,$5)`,
-          [reportId, 'resolved', 'Selesai ditangani', pengurusId, t2]
-        );
+        const waktuResolved = new Date(waktuDibuat.getTime() + 1000 * 60 * 60 * 24);
+        await prisma.reportStatusHistory.create({
+          data: {
+            reportId: idLaporan,
+            status: 'resolved',
+            notes: 'Selesai ditangani',
+            updatedBy: idPengurus,
+            createdAt: waktuResolved
+          }
+        });
       }
 
-      // Log AI processing
-      await pool.query(
-        `INSERT INTO ai_processing_log (report_id, original_text, ai_summary, ai_category, ai_urgency, processing_time_ms, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [
-          reportId,
-          `${title}. ${description}`,
-          `Ringkasan AI: ${title}`,
-          category,
-          urgency,
-          Math.floor(Math.random() * 300) + 120,
-          createdAt
-        ]
-      );
-      createdCount++;
+      // Catat proses AI
+      await prisma.aiProcessingLog.create({
+        data: {
+          reportId: idLaporan,
+          originalText: `${judul}. ${deskripsi}`,
+          aiSummary: `Ringkasan AI: ${judul}`,
+          aiCategory: kategori,
+          aiUrgency: urgensi,
+          processingTimeMs: Math.floor(Math.random() * 300) + 120,
+          createdAt: waktuDibuat
+        }
+      });
+      jumlahDibuat++;
     }
-    console.log(`Seeded reports: ${createdCount}`);
-  } catch (err) {
-    console.error('Seed error:', err);
+    console.log(`Seeded reports: ${jumlahDibuat}`);
+  } catch (error) {
+    console.error('Seed error:', error);
     process.exit(1);
   } finally {
+    await prisma.$disconnect();
     process.exit(0);
   }
 }
 
-run();
-
-
+jalankan();

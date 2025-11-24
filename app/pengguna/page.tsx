@@ -8,6 +8,7 @@ import AdminSystemPanel from '@/components/AdminSystemPanel';
 
 export default function PenggunaPage() {
   const { user, isAuthenticated, checkAuth } = useAuthStore();
+  const hasCheckedAuth = useAuthStore((s) => s.hasCheckedAuth);
   const router = useRouter();
 
   useEffect(() => {
@@ -15,23 +16,32 @@ export default function PenggunaPage() {
   }, [checkAuth]);
 
   useEffect(() => {
-    const hasCheckedAuth = useAuthStore.getState().hasCheckedAuth;
     if (hasCheckedAuth && !isAuthenticated) {
       router.push('/login');
       return;
     }
     
-    // Only admin can access this page
-    if (hasCheckedAuth && user && user.role !== 'admin') {
+    // Only admin, admin_rw, ketua_rt, sekretaris_rt can access this page
+    const allowedRoles = ['admin', 'admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'];
+    if (hasCheckedAuth && user && !allowedRoles.includes(user.role)) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, router, user]);
+  }, [hasCheckedAuth, isAuthenticated, router, user]);
+
+  if (!hasCheckedAuth) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64 text-gray-600">Memuat...</div>
+      </Layout>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return null;
   }
 
-  if (user.role !== 'admin') {
+  const allowedRoles = ['admin', 'admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'];
+  if (!allowedRoles.includes(user.role)) {
     return null;
   }
 

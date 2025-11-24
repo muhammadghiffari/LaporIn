@@ -7,23 +7,36 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node scripts/seed.js",
+    "seed:location": "node scripts/seed-with-location.js",
+    "clear-seeder": "node scripts/clear-seeder-data.js",
+    "clear-all": "node scripts/clear-all-data-except-chatbot.js",
     "test": "jest --coverage --verbose",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:verification": "node test-user-verification.js",
+    "verify:blockchain": "node scripts/verify-blockchain.js",
+    "view:blockchain": "node scripts/view-blockchain-data.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^6.19.0",
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "@turf/turf": "^7.3.0",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
+    "canvas": "^3.2.0",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "dotenv": "^16.3.1",
     "ethers": "^6.9.0",
     "express": "^4.18.2",
+    "face-api.js": "^0.22.2",
     "groq-sdk": "^0.35.0",
     "jsonwebtoken": "^9.0.2",
     "openai": "^4.20.1",
     "pg": "^8.11.3",
-    "redis": "^4.6.10"
+    "prisma": "^6.19.0",
+    "redis": "^4.6.10",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "jest": "^29.7.0",

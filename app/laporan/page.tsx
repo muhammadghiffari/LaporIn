@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import Link from 'next/link';
 import Image from 'next/image';
+import { CheckCircle2 } from 'lucide-react';
 
 interface Laporan {
   id: number;
@@ -42,6 +43,7 @@ interface Laporan {
   location?: string;
   created_at: string;
   blockchain_tx_hash?: string;
+  is_mock_blockchain?: boolean; // Flag untuk mock blockchain
   user_name?: string;
   user_email?: string;
 }
@@ -71,6 +73,7 @@ export default function LaporanPage() {
   const router = useRouter();
   const [laporan, setLaporan] = useState<Laporan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
@@ -78,31 +81,56 @@ export default function LaporanPage() {
   const [filterUrgency, setFilterUrgency] = useState<string>('');
   const itemsPerPage = 10;
 
+  const hasCheckedAuth = useAuthStore((s) => s.hasCheckedAuth);
+
   useEffect(() => {
     checkAuth();
-    if (!isAuthenticated) {
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (hasCheckedAuth && !isAuthenticated) {
       router.push('/login');
       return;
     }
-  }, [isAuthenticated, checkAuth, router]);
+  }, [hasCheckedAuth, isAuthenticated, router]);
 
   useEffect(() => {
-    fetchLaporan();
-  }, [page, search, filterStatus, filterUrgency]);
+    if (hasCheckedAuth && isAuthenticated) {
+      fetchLaporan();
+    }
+  }, [hasCheckedAuth, isAuthenticated, page, search, filterStatus, filterUrgency]);
 
-  const fetchLaporan = async () => {
+  // Realtime polling - refresh setiap 10 detik untuk update realtime
+  useEffect(() => {
+    if (!hasCheckedAuth || !isAuthenticated) return;
+    
+    const interval = setInterval(() => {
+      setIsRefreshing(true);
+      fetchLaporan(true).finally(() => {
+        setTimeout(() => setIsRefreshing(false), 500);
+      });
+    }, 10000); // Poll setiap 10 detik untuk update realtime
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCheckedAuth, isAuthenticated, page, search, filterStatus, filterUrgency]);
+
+  const fetchLaporan = async (isBackgroundRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isBackgroundRefresh) {
+        setLoading(true);
+      }
       const params = new URLSearchParams();
       
-      // Untuk warga, hanya tampilkan laporan mereka sendiri
+      // PRIVACY: Untuk warga, hanya tampilkan laporan mereka sendiri di halaman /laporan
+      // Dashboard tetap transparan (semua laporan RT/RW)
       if (user?.role === 'warga') {
-        // API akan otomatis filter berdasarkan user_id dari token
-      } else {
-        // Untuk pengurus/admin, tampilkan semua dengan filter
-        if (filterStatus) params.append('status', filterStatus);
-        if (filterUrgency) params.append('urgency', filterUrgency);
+        params.append('my_reports', 'true');
       }
+      
+      // Filter hanya untuk status dan urgency (jika ada)
+      if (filterStatus) params.append('status', filterStatus);
+      if (filterUrgency) params.append('urgency', filterUrgency);
       
       params.append('limit', itemsPerPage.toString());
       params.append('offset', ((page - 1) * itemsPerPage).toString());
@@ -139,19 +167,29 @@ export default function LaporanPage() {
     return null;
   }
 
-  const isPengurus = ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'pengurus'].includes(user.role || '');
+  const isPengurus = ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'].includes(user.role || '');
 
   return (
     <Layout>
         {/* Header */}
         <div className="mb-6">
           <Typography variant="h4" className="font-bold text-gray-900 mb-2">
-            Daftar Laporan
+            {user?.role === 'warga' ? 'Laporan Saya' : 'Daftar Laporan'}
           </Typography>
           <Typography variant="body2" className="text-gray-600">
-            Kelola dan pantau semua laporan dari warga
+            {user?.role === 'warga' 
+              ? 'Pantau progres dan status laporan Anda' 
+              : 'Kelola dan pantau semua laporan dari warga'}
           </Typography>
         </div>
+
+        {/* Realtime indicator */}
+        {isRefreshing && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2 text-sm text-blue-700 animate-pulse">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            <span>Memperbarui data realtime...</span>
+          </div>
+        )}
 
         {/* Filters & Search */}
         <Box className="mb-6 bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
@@ -251,10 +289,15 @@ export default function LaporanPage() {
             <TableHead className="bg-gray-50">
               <TableRow>
                 <TableCell className="font-semibold">Judul Laporan</TableCell>
-                {isPengurus && <TableCell className="font-semibold">Pelapor</TableCell>}
+                {user?.role === 'warga' ? null : (
+                  <TableCell className="font-semibold">Pelapor</TableCell>
+                )}
                 <TableCell className="font-semibold">Kategori</TableCell>
                 <TableCell className="font-semibold">Urgensi</TableCell>
                 <TableCell className="font-semibold">Status</TableCell>
+                {user?.role === 'admin' || user?.role === 'pengurus' ? (
+                <TableCell className="font-semibold">Blockchain</TableCell>
+                ) : null}
                 <TableCell className="font-semibold">Tanggal</TableCell>
                 <TableCell className="font-semibold text-center">Aksi</TableCell>
               </TableRow>
@@ -264,17 +307,23 @@ export default function LaporanPage() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton variant="text" width="100%" /></TableCell>
-                    {isPengurus && <TableCell><Skeleton variant="text" width={100} /></TableCell>}
+                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
                     <TableCell><Skeleton variant="text" width={80} /></TableCell>
                     <TableCell><Skeleton variant="text" width={80} /></TableCell>
                     <TableCell><Skeleton variant="text" width={100} /></TableCell>
+                    {(user?.role === 'admin' || user?.role === 'pengurus') && (
+                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
+                    )}
                     <TableCell><Skeleton variant="text" width={120} /></TableCell>
                     <TableCell><Skeleton variant="text" width={100} /></TableCell>
                   </TableRow>
                 ))
               ) : laporan.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isPengurus ? 7 : 6} className="text-center py-12">
+                  <TableCell colSpan={
+                    (user?.role === 'admin' || user?.role === 'pengurus') ? 8 : 
+                    (user?.role === 'warga') ? 6 : 7
+                  } className="text-center py-12">
                     <div className="flex flex-col items-center gap-4">
                       <Image
                         src="https://images.unsplash.com/photo-1503264116251-35a269479413?q=80&w=1280&auto=format&fit=crop"
@@ -308,16 +357,27 @@ export default function LaporanPage() {
                         )}
                       </div>
                     </TableCell>
-                    {isPengurus && (
+                    {user?.role !== 'warga' && (
                       <TableCell>
-                        <Typography variant="body2" className="font-medium">
-                          {item.user_name || 'Tidak diketahui'}
-                        </Typography>
-                        {item.user_email && (
-                          <Typography variant="caption" className="text-gray-500">
-                            {item.user_email}
+                        <div>
+                          <Typography variant="body2" className="font-semibold text-gray-900">
+                            {item.user_name || 'Tidak diketahui'}
                           </Typography>
-                        )}
+                          {/* Email hanya untuk admin/pengurus */}
+                          {item.user_email && (user?.role === 'admin' || user?.role === 'pengurus') && (
+                            <Typography variant="caption" className="text-gray-500 block">
+                              {item.user_email}
+                            </Typography>
+                          )}
+                          {item.blockchain_tx_hash && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <CheckCircle2 className="w-3 h-3 text-green-600" />
+                              <Typography variant="caption" className="text-green-600 text-xs font-semibold">
+                                Terverifikasi Blockchain
+                          </Typography>
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                     <TableCell>
@@ -351,6 +411,40 @@ export default function LaporanPage() {
                         />
                       )}
                     </TableCell>
+                    {(user?.role === 'admin' || user?.role === 'pengurus') && (
+                    <TableCell>
+                      {item.blockchain_tx_hash ? (
+                          item.is_mock_blockchain ? (
+                            <div className="flex items-center gap-1 text-gray-500">
+                              <BlockIcon fontSize="small" />
+                              <Typography variant="caption" className="font-mono text-xs">
+                                {item.blockchain_tx_hash.substring(0, 8)}...
+                              </Typography>
+                              <Typography variant="caption" className="text-xs text-gray-400">
+                                (Mock)
+                              </Typography>
+                            </div>
+                          ) : (
+                        <a
+                          href={`https://amoy.polygonscan.com/tx/${item.blockchain_tx_hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Verifikasi di Blockchain Explorer"
+                          className="flex items-center gap-1 text-purple-600 hover:text-purple-800"
+                        >
+                          <BlockIcon fontSize="small" />
+                          <Typography variant="caption" className="font-mono text-xs">
+                            {item.blockchain_tx_hash.substring(0, 8)}...
+                          </Typography>
+                        </a>
+                          )
+                      ) : (
+                        <Typography variant="caption" className="text-gray-400">
+                          Belum tercatat
+                        </Typography>
+                      )}
+                    </TableCell>
+                    )}
                     <TableCell>
                       <Typography variant="caption" className="text-gray-600">
                         {new Date(item.created_at).toLocaleDateString('id-ID', {
@@ -358,6 +452,9 @@ export default function LaporanPage() {
                           month: 'short',
                           day: 'numeric',
                         })}
+                      </Typography>
+                      <Typography variant="caption" className="text-gray-400 block text-xs">
+                        {new Date(item.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -367,18 +464,6 @@ export default function LaporanPage() {
                             <VisibilityIcon fontSize="small" className="text-blue-600" />
                           </IconButton>
                         </Link>
-                        {item.blockchain_tx_hash && (
-                          <a
-                            href={`https://mumbai.polygonscan.com/tx/${item.blockchain_tx_hash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Lihat di Blockchain"
-                          >
-                            <IconButton size="small">
-                              <BlockIcon fontSize="small" className="text-purple-600" />
-                            </IconButton>
-                          </a>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>

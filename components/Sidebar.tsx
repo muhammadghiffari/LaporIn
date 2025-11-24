@@ -13,6 +13,7 @@ import {
   MessageCircle,
   X,
   Menu,
+  MapPin,
 } from 'lucide-react';
 
 interface NavItem {
@@ -35,7 +36,13 @@ const navItems: NavItem[] = [
     name: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
-    roles: ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'pengurus'],
+    roles: ['admin', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'],
+  },
+  {
+    name: 'Peta Laporan',
+    href: '/admin/peta-laporan',
+    icon: MapPin,
+    roles: ['admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'],
   },
   { name: 'Pengaturan', href: '/pengaturan', icon: Settings },
 ];
@@ -75,11 +82,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         className={`fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 shadow-lg flex flex-col z-50 transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
+        suppressHydrationWarning
       >
         {/* Logo dengan close button untuk mobile */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between" suppressHydrationWarning>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center" suppressHydrationWarning>
               <span className="text-white font-bold text-xl">L</span>
             </div>
             <span className="text-xl font-bold text-gray-900">LaporIn</span>
@@ -94,12 +102,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
       {/* User Info */}
-      <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center text-white font-semibold">
+      <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50" suppressHydrationWarning>
+        <div className="flex items-center gap-3" suppressHydrationWarning>
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center text-white font-semibold" suppressHydrationWarning>
             {user?.name?.charAt(0).toUpperCase() || 'U'}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" suppressHydrationWarning>
             <p className="text-sm font-semibold text-gray-900 truncate">
               {user?.name || 'User'}
             </p>
@@ -112,7 +120,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 ? 'Admin RW'
                 : user?.role === 'ketua_rt'
                 ? 'Ketua RT'
-                : user?.role === 'sekretaris_rt'
+                : ['sekretaris_rt', 'sekretaris'].includes(user?.role || '')
                 ? 'Sekretaris RT'
                 : user?.role === 'pengurus'
                 ? 'Pengurus'
@@ -123,7 +131,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto p-4 space-y-1" suppressHydrationWarning>
         {filteredNavItems.map((item, index) => {
           const Icon = item.icon;
           // Active state: exact match or starts with (for nested routes)
@@ -148,7 +156,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       {/* Logout */}
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200" suppressHydrationWarning>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all w-full"

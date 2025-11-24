@@ -10,9 +10,17 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Fix hydration mismatch: hanya render setelah client mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close sidebar on window resize to desktop
   useEffect(() => {
+    if (!mounted) return;
+    
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
         setSidebarOpen(false);
@@ -21,10 +29,23 @@ export default function Layout({ children }: LayoutProps) {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [mounted]);
+
+  // Prevent hydration mismatch: render placeholder saat SSR
+  if (!mounted) {
+    return (
+      <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50" suppressHydrationWarning>
+        <div className="flex-1 lg:ml-64 pt-20 lg:pt-6 p-4 lg:p-6 transition-all duration-300 w-full" suppressHydrationWarning>
+          <div className="max-w-7xl mx-auto" suppressHydrationWarning>
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50" suppressHydrationWarning>
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       {/* Hamburger Button - Mobile Only, hanya muncul saat sidebar tertutup */}
@@ -38,8 +59,8 @@ export default function Layout({ children }: LayoutProps) {
         </button>
       )}
 
-      <main className="flex-1 lg:ml-64 pt-20 lg:pt-6 p-4 lg:p-6 transition-all duration-300 w-full">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 lg:ml-64 pt-20 lg:pt-6 p-4 lg:p-6 transition-all duration-300 w-full" suppressHydrationWarning>
+        <div className="max-w-7xl mx-auto" suppressHydrationWarning>
           {children}
         </div>
       </main>

@@ -14,7 +14,11 @@ import {
   Key,
   Save,
   AlertCircle,
+  Camera,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
+import FaceCapture from '@/components/FaceCapture';
 
 export default function PengaturanPage() {
   const { user, isAuthenticated, checkAuth } = useAuthStore();
@@ -39,13 +43,26 @@ export default function PengaturanPage() {
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifReport, setNotifReport] = useState(true);
   const [notifStatus, setNotifStatus] = useState(true);
+  
+  // Face Recognition settings
+  const [faceVerified, setFaceVerified] = useState(false);
+  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
+  const [showFaceCapture, setShowFaceCapture] = useState(false);
+  const [faceError, setFaceError] = useState('');
+  const [faceSuccess, setFaceSuccess] = useState('');
+  const [registeringFace, setRegisteringFace] = useState(false);
+  
+  // User verification status
+  const [isVerified, setIsVerified] = useState(false);
+  const [verifiedAt, setVerifiedAt] = useState<string | null>(null);
+
+  const hasCheckedAuth = useAuthStore((s) => s.hasCheckedAuth);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
   useEffect(() => {
-    const hasCheckedAuth = useAuthStore.getState().hasCheckedAuth;
     if (hasCheckedAuth && !isAuthenticated) {
       router.push('/login');
       return;
@@ -56,8 +73,73 @@ export default function PengaturanPage() {
       setName(user.name || '');
       setEmail(user.email || '');
       setRtRw(user.rt_rw || '');
+      
+      // Load face verification status
+      loadFaceStatus();
     }
-  }, [isAuthenticated, router, user]);
+  }, [hasCheckedAuth, isAuthenticated, router, user]);
+  
+  const loadFaceStatus = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      setFaceVerified(response.data.face_verified || false);
+      setIsVerified(response.data.is_verified || false);
+      setVerifiedAt(response.data.verified_at || null);
+    } catch (err) {
+      console.error('Failed to load face status:', err);
+    }
+  };
+  
+  const handleFaceCaptured = (descriptor: number[]) => {
+    setFaceDescriptor(descriptor);
+    setFaceError('');
+  };
+  
+  const handleRegisterFace = async () => {
+    if (!faceDescriptor) {
+      setFaceError('Silakan capture wajah terlebih dahulu');
+      return;
+    }
+    
+    setRegisteringFace(true);
+    setFaceError('');
+    setFaceSuccess('');
+    
+    try {
+      const response = await api.post('/auth/register-face', {
+        faceDescriptor: JSON.stringify(faceDescriptor)
+      });
+      
+      if (response.data.success) {
+        setFaceSuccess('Face recognition berhasil didaftarkan!');
+        setFaceVerified(true);
+        setShowFaceCapture(false);
+        setFaceDescriptor(null);
+        
+        // Update user state
+        useAuthStore.setState({
+          user: {
+            ...user!,
+            face_verified: true
+          }
+        });
+        
+        setTimeout(() => setFaceSuccess(''), 5000);
+      }
+    } catch (err: any) {
+      setFaceError(err.response?.data?.error || 'Gagal mendaftarkan face recognition');
+    } finally {
+      setRegisteringFace(false);
+    }
+  };
+
+  if (!hasCheckedAuth) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64 text-gray-600">Memuat...</div>
+      </Layout>
+    );
+  }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,11 +228,66 @@ export default function PengaturanPage() {
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
               <User className="w-5 h-5 text-blue-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-bold text-gray-900">Profil</h2>
               <p className="text-sm text-gray-600">Informasi akun Anda</p>
             </div>
+            {/* Verification Status Badge */}
+            {user?.role === 'warga' && (
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                isVerified 
+                  ? 'bg-green-100 text-green-700' 
+                  : 'bg-yellow-100 text-yellow-700'
+              }`}>
+                {isVerified ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Terverifikasi</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Belum Diverifikasi</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+          
+          {/* Verification Alert for Warga */}
+          {user?.role === 'warga' && !isVerified && (
+            <div className="mb-6 bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-yellow-900 mb-1">Akun Belum Diverifikasi</h3>
+                  <p className="text-sm text-yellow-700">
+                    Akun Anda belum diverifikasi oleh Admin RT/RW. Silakan hubungi Admin RT/RW untuk melakukan verifikasi akun Anda terlebih dahulu sebelum dapat membuat laporan.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {user?.role === 'warga' && isVerified && verifiedAt && (
+            <div className="mb-6 bg-green-50 border-2 border-green-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-green-900 mb-1">Akun Terverifikasi</h3>
+                  <p className="text-sm text-green-700">
+                    Akun Anda telah diverifikasi pada {new Date(verifiedAt).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}. Anda dapat menggunakan semua fitur platform.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSaveProfile} className="space-y-5">
             <div>
@@ -304,6 +441,116 @@ export default function PengaturanPage() {
           </form>
         </div>
 
+        {/* Face Recognition Settings */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <Camera className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Face Recognition</h2>
+              <p className="text-sm text-gray-600">Daftarkan atau perbarui verifikasi wajah Anda</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {/* Status */}
+            <div className={`p-4 rounded-xl border-2 ${
+              faceVerified 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-yellow-50 border-yellow-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                {faceVerified ? (
+                  <>
+                    <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    <div>
+                      <p className="font-semibold text-green-900">Face Recognition Terdaftar</p>
+                      <p className="text-sm text-green-700">Wajah Anda sudah terdaftar dan terverifikasi</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-6 h-6 text-yellow-600" />
+                    <div>
+                      <p className="font-semibold text-yellow-900">Face Recognition Belum Terdaftar</p>
+                      <p className="text-sm text-yellow-700">Daftarkan wajah Anda untuk keamanan ekstra saat login</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Register/Update Face */}
+            {!faceVerified && (
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setShowFaceCapture(!showFaceCapture)}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl hover:from-indigo-700 hover:to-indigo-800 shadow-md hover:shadow-lg transition-all font-semibold"
+                >
+                  <Camera className="w-5 h-5" />
+                  {showFaceCapture ? 'Sembunyikan Kamera' : 'Daftarkan Wajah'}
+                </button>
+
+                {showFaceCapture && (
+                  <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <FaceCapture
+                      onFaceCaptured={handleFaceCaptured}
+                      onError={(error) => setFaceError(error)}
+                      autoStart={showFaceCapture && !faceDescriptor}
+                      hideAfterCapture={false}
+                    />
+                    
+                    {faceError && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{faceError}</p>
+                      </div>
+                    )}
+                    
+                    {faceDescriptor && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={handleRegisterFace}
+                          disabled={registeringFace}
+                          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all font-semibold"
+                        >
+                          {registeringFace ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Mendaftarkan...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-5 h-5" />
+                              <span>Simpan Face Recognition</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {faceVerified && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-sm text-blue-700">
+                  <strong>Info:</strong> Face recognition Anda sudah terdaftar. Untuk memperbarui, silakan hubungi administrator.
+                </p>
+              </div>
+            )}
+
+            {faceSuccess && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-xl animate-fade-in">
+                <p className="text-sm text-green-700 font-medium">{faceSuccess}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Notification Settings */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-6">
@@ -392,7 +639,7 @@ export default function PengaturanPage() {
                     ? 'Admin RW'
                     : user.role === 'ketua_rt'
                     ? 'Ketua RT'
-                    : user.role === 'sekretaris_rt'
+                    : ['sekretaris_rt', 'sekretaris'].includes(user.role || '')
                     ? 'Sekretaris RT'
                     : user.role === 'pengurus'
                     ? 'Pengurus'
