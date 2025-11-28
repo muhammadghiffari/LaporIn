@@ -402,11 +402,11 @@ export default function LaporanPage() {
                 width: 100,
                 getActions: (params: GridRowParams<Laporan>) => [
                   <GridActionsCellItem
+                    key="view"
                     icon={<Tooltip title="Lihat Detail"><VisibilityIcon /></Tooltip>}
                     label="Lihat Detail"
                     onClick={() => router.push(`/reports/${params.row.id}`)}
                     showInMenu={false}
-                    sx={{ color: '#3B82F6' }}
                   />,
                 ],
               },
@@ -431,7 +431,6 @@ export default function LaporanPage() {
                 quickFilterProps: { debounceMs: 500 },
                 printOptions: { disableToolbarButton: true },
                 csvOptions: { disableToolbarButton: true },
-                excelOptions: { disableToolbarButton: true },
               },
             }}
             sx={{
