@@ -90,6 +90,15 @@ docker-compose up -d
    - Railway bisa auto-provision PostgreSQL
    - Atau gunakan external database (Supabase, Neon, dll)
 
+5. **Setup Database Schema:**
+   ```bash
+   # Jika database baru/kosong, gunakan migrate
+   railway run npx prisma migrate deploy
+   
+   # Jika database sudah ada data, gunakan db push
+   railway run npx prisma db push
+   ```
+
 ### Option 2: Render 🎨
 
 1. **Connect Repository:**
@@ -100,7 +109,7 @@ docker-compose up -d
 2. **Configure:**
    - **Build Command:** `npm ci && npx prisma generate`
    - **Start Command:** `node server.js`
-   - **Environment:** Node 18
+   - **Environment:** Node 20
 
 3. **Set Environment Variables:**
    - Tambahkan semua variabel dari `.env.example`
@@ -108,6 +117,14 @@ docker-compose up -d
 4. **Setup Database:**
    - Render bisa auto-provision PostgreSQL
    - Atau gunakan external database
+
+5. **Setup Database Schema:**
+   - Gunakan Render Shell untuk run:
+   ```bash
+   npx prisma db push
+   # atau
+   npx prisma migrate deploy
+   ```
 
 ### Option 3: Vercel (Serverless) ⚡
 
@@ -133,6 +150,12 @@ docker-compose up -d
    - DigitalOcean bisa auto-provision PostgreSQL
    - Atau gunakan managed database
 
+5. **Setup Database Schema:**
+   - Gunakan App Platform console untuk run:
+   ```bash
+   cd backend && npx prisma db push
+   ```
+
 ### Option 5: VPS (Ubuntu/Debian) 🖥️
 
 1. **Setup Server:**
@@ -140,8 +163,8 @@ docker-compose up -d
    # Update system
    sudo apt update && sudo apt upgrade -y
 
-   # Install Node.js 18
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   # Install Node.js 20
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
    sudo apt install -y nodejs
 
    # Install PostgreSQL
@@ -169,8 +192,10 @@ docker-compose up -d
    GRANT ALL PRIVILEGES ON DATABASE wargalapor TO laporin;
    \q
 
-   # Run Prisma migrations
-   npx prisma migrate deploy
+   # Run Prisma schema sync
+   npx prisma db push
+   # atau jika ingin menggunakan migration:
+   npx prisma migrate dev --name init
    ```
 
 4. **Run dengan PM2:**
@@ -239,16 +264,24 @@ docker-compose up -d
 3. Copy connection string
 4. Update `DATABASE_URL` di environment variables
 
-### Run Migrations
+### Run Database Schema
 
-Setelah database setup, jalankan migrations:
-
+**Untuk Database Baru/Kosong:**
 ```bash
-cd backend
 npx prisma migrate deploy
-# atau
-npx prisma db push
 ```
+
+**Untuk Database yang Sudah Ada Data:**
+```bash
+# Gunakan db push untuk sync schema tanpa migration history
+npx prisma db push
+
+# Atau baseline migration jika ingin menggunakan migration system
+npx prisma migrate resolve --applied 0_init
+npx prisma migrate deploy
+```
+
+**Note:** `prisma db push` lebih cocok untuk production jika database sudah ada dan tidak ada migration history.
 
 ---
 
@@ -271,9 +304,9 @@ Pastikan semua environment variables sudah di-set dengan benar. Lihat `.env.exam
 
 ## ✅ Post-Deployment Checklist
 
-- [ ] Database migrations sudah dijalankan
+- [ ] Database schema sudah di-sync (`prisma db push` atau `migrate deploy`)
 - [ ] Environment variables sudah di-set dengan benar
-- [ ] Health check endpoint (`/health`) bisa diakses
+- [ ] Health check endpoint (`/api/health`) bisa diakses
 - [ ] API endpoints bisa diakses
 - [ ] CORS sudah dikonfigurasi dengan benar
 - [ ] SSL/HTTPS sudah setup (untuk production)
@@ -288,7 +321,7 @@ Setelah deploy, test dengan:
 
 ```bash
 # Health check
-curl https://your-api-domain.com/health
+curl https://your-api-domain.com/api/health
 
 # Test API endpoint
 curl https://your-api-domain.com/api/auth/users
@@ -302,8 +335,8 @@ curl https://your-api-domain.com/api/auth/users
 - [Render Documentation](https://render.com/docs)
 - [DigitalOcean App Platform](https://www.digitalocean.com/products/app-platform)
 - [PM2 Documentation](https://pm2.keymetrics.io/docs/usage/quick-start/)
+- [Prisma Deployment Guide](https://www.prisma.io/docs/guides/deployment)
 
 ---
 
 **Need Help?** Check backend documentation atau buat issue di GitHub repository.
-
