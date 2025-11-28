@@ -1,4 +1,6 @@
 const express = require('express');
+// Note: @tensorflow/tfjs-node removed to avoid version conflicts with face-api.js
+// face-api.js uses its own bundled TensorFlow.js v1.7.0
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -8,6 +10,7 @@ const authRoutes = require('./routes/auth.routes');
 const reportsRoutes = require('./routes/reports.routes');
 const chatRoutes = require('./routes/chat.routes');
 const { router: nlpRoutes } = require('./routes/nlp.routes');
+const { loadModels } = require('./services/faceExtractionService');
 
 const app = express();
 const server = http.createServer(app);
@@ -86,6 +89,12 @@ app.use('/api/nlp', nlpRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'LaporIn API is running' });
+});
+
+// Load face recognition models saat startup (non-blocking)
+loadModels().catch(err => {
+  console.warn('[Server] Face recognition models not loaded (optional):', err.message);
+  console.warn('[Server] Face registration via photo upload will not work until models are available.');
 });
 
 const PORT = process.env.PORT || 3001;

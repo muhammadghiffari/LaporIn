@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../../services/api_service.dart';
-import '../reports/create_report_screen.dart';
+import '../../services/location_service.dart';
 import '../../providers/report_provider.dart';
+import '../reports/create_report_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -33,6 +35,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    Intl.defaultLocale ??= 'id_ID';
     // Initial message dari AI
     _messages.add({
       'role': 'assistant',
@@ -81,19 +84,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() => _isLoading = true);
     
     try {
+      // Deteksi apakah ini chat baru (hanya ada initial message dari AI)
+      final isNewSession = _messages.length <= 1;
+      
+      // Ambil lokasi GPS otomatis
+      Map<String, double>? location;
+      try {
+        final position = await LocationService().getCurrentLocation();
+        if (position != null) {
+          location = {
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          };
+        }
+      } catch (e) {
+        debugPrint('Error getting location: $e');
+      }
+      
       final response = await ApiService().sendChatMessage(
         '[Gambar terlampir]',
-        _messages,
+        _prepareMessagesForApi(),
+        newSession: isNewSession,
+        location: location,
       );
       
       setState(() {
+        final rawContent = response.data['response'] ?? response.data['message'] ?? response.data['reply'] ?? 'Terima kasih atas gambar yang Anda kirim.';
         _messages.add({
           'role': 'assistant',
-          'content': response.data['response'] ?? response.data['message'] ?? 'Terima kasih atas gambar yang Anda kirim.',
+          'content': _removeMarkdown(rawContent),
           'reportData': response.data['reportData'],
+          'awaitingConfirmation': response.data['awaitingConfirmation'] ?? response.data['previewMode'] ?? false,
           'timestamp': DateTime.now(),
         });
-        _pendingReportDraft = response.data['reportData'];
+        
+        // Set pending draft jika ada reportData (SELALU set untuk memastikan tombol CTA muncul)
+        if (response.data['reportData'] != null) {
+          _pendingReportDraft = response.data['reportData'];
+          debugPrint('✅ Draft set dengan reportData (image): ${response.data['reportData']}');
+        } else {
+          _pendingReportDraft = null;
+        }
         _isLoading = false;
         _imageBase64 = null;
         _imageFile = null;
@@ -132,20 +163,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final response = await ApiService().sendChatMessage(userMessage, _messages);
+      // Deteksi apakah ini chat baru (hanya ada initial message dari AI)
+      final isNewSession = _messages.length <= 1;
+      
+      // Ambil lokasi GPS otomatis
+      Map<String, double>? location;
+      try {
+        final position = await LocationService().getCurrentLocation();
+        if (position != null) {
+          location = {
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+          };
+        }
+      } catch (e) {
+        debugPrint('Error getting location: $e');
+      }
+      
+      final response = await ApiService().sendChatMessage(
+        userMessage,
+        _prepareMessagesForApi(),
+        newSession: isNewSession,
+        location: location,
+      );
       
       setState(() {
+        final rawContent = response.data['response'] ?? response.data['message'] ?? response.data['reply'] ?? 'Maaf, terjadi kesalahan';
         _messages.add({
           'role': 'assistant',
-          'content': response.data['response'] ?? response.data['message'] ?? response.data['reply'] ?? 'Maaf, terjadi kesalahan',
+          'content': _removeMarkdown(rawContent),
           'reportData': response.data['reportData'],
           'awaitingConfirmation': response.data['awaitingConfirmation'] ?? response.data['previewMode'] ?? false,
           'timestamp': DateTime.now(),
         });
         
-        // Set pending draft jika ada reportData
+        // Set pending draft jika ada reportData (SELALU set untuk memastikan tombol CTA muncul)
         if (response.data['reportData'] != null) {
           _pendingReportDraft = response.data['reportData'];
+          debugPrint('✅ Draft set dengan reportData: ${response.data['reportData']}');
+        } else {
+          // Clear draft jika tidak ada reportData
+          _pendingReportDraft = null;
         }
         
         // Jika report sudah dibuat otomatis
@@ -180,31 +238,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _createReportFromDraft() async {
-    if (_pendingReportDraft == null) return;
-    
-    final draft = _pendingReportDraft!;
-    
-    // Navigate to create report screen dengan pre-filled data
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CreateReportScreen(
-          initialData: {
-            'title': draft['title'] ?? draft['judul'] ?? '',
-            'description': draft['description'] ?? draft['deskripsi'] ?? '',
-            'location': draft['location'] ?? draft['lokasi'] ?? '',
-            'imageUrl': draft['imageUrl'] ?? draft['image_url'],
-          },
-        ),
-      ),
-    );
-    
-    if (result == true) {
-      setState(() {
-        _pendingReportDraft = null;
-      });
-    }
-  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -216,6 +249,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         );
       }
     });
+  }
+
+  List<Map<String, dynamic>> _prepareMessagesForApi() {
+    return _messages.map((message) {
+      final timestamp = message['timestamp'];
+      return {
+        'role': message['role'],
+        'content': message['content'],
+        if (message['imageUrl'] != null) 'imageUrl': message['imageUrl'],
+        if (timestamp is DateTime) 'timestamp': timestamp.toIso8601String(),
+      };
+    }).toList();
+  }
+
+  // Fungsi untuk menghilangkan markdown formatting (bintang, dll)
+  String _removeMarkdown(String text) {
+    // Hapus bold markdown (**text** atau __text__)
+    text = text.replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1');
+    text = text.replaceAll(RegExp(r'__(.*?)__'), r'$1');
+    
+    // Hapus italic markdown (*text* atau _text_)
+    text = text.replaceAll(RegExp(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)'), r'$1');
+    text = text.replaceAll(RegExp(r'(?<!_)_(?!_)(.*?)(?<!_)_(?!_)'), r'$1');
+    
+    // Hapus link markdown [text](url)
+    text = text.replaceAll(RegExp(r'\[([^\]]+)\]\([^\)]+\)'), r'$1');
+    
+    // Hapus code markdown (`text`)
+    text = text.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
+    
+    return text;
   }
 
   @override
@@ -286,7 +350,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'Coba tanyakan: "Saya ingin melaporkan jalan rusak"',
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
@@ -302,8 +371,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 _messageController.text = suggestion;
                                 _sendMessage();
                               },
-                              backgroundColor: Colors.blue[50],
-                              side: BorderSide(color: Colors.blue[200]!),
+                              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue[900]!.withOpacity(0.3)
+                                  : Colors.blue[50],
+                              side: BorderSide(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.blue[700]!.withOpacity(0.5)
+                                    : Colors.blue[200]!,
+                              ),
+                              labelStyle: TextStyle(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.blue[200]
+                                    : Colors.blue[700],
+                              ),
                             );
                           }).toList(),
                         ),
@@ -342,9 +422,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[800]
+                                        : Colors.white,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.grey[200]!),
+                                    border: Border.all(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey[700]!
+                                          : Colors.grey[200]!,
+                                    ),
                                   ),
                                   child: Row(
                                     children: [
@@ -359,7 +445,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       const SizedBox(width: 12),
                                       Text(
                                         'AI sedang menganalisis...',
-                                        style: TextStyle(color: Colors.grey[700]),
+                                        style: TextStyle(
+                                          color: Theme.of(context).brightness == Brightness.dark
+                                              ? Colors.grey[300]
+                                              : Colors.grey[700],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -374,8 +464,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       final messageIndex = index > _messages.length ? index - 1 : index;
                       final message = _messages[messageIndex];
                       final isUser = message['role'] == 'user';
+                      final DateTime? timestamp = message['timestamp'] as DateTime?;
+                      final previousTimestamp = messageIndex > 0
+                          ? _messages[messageIndex - 1]['timestamp'] as DateTime?
+                          : null;
+                      final bool showDateSeparator =
+                          timestamp != null && (previousTimestamp == null || !_isSameDay(timestamp, previousTimestamp));
+                      final DateTime? separatorTimestamp = showDateSeparator ? timestamp : null;
 
-                      return Align(
+                      final bubble = Align(
                         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -407,9 +504,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                             colors: [Colors.blue[600]!, Colors.indigo[600]!],
                                           )
                                         : null,
-                                    color: isUser ? null : Colors.white,
+                                    color: isUser
+                                        ? null
+                                        : (Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[800]
+                                            : Colors.white),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: isUser ? null : Border.all(color: Colors.grey[200]!),
+                                    border: isUser
+                                        ? null
+                                        : Border.all(
+                                            color: Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.grey[700]!
+                                                : Colors.grey[200]!,
+                                          ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.black.withOpacity(0.1),
@@ -435,20 +542,199 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                           ),
                                         ),
                                       Text(
-                                        message['content'],
+                                        _removeMarkdown(message['content']),
                                         style: TextStyle(
-                                          color: isUser ? Colors.white : Colors.black87,
+                                          color: isUser
+                                              ? Colors.white
+                                              : (Theme.of(context).brightness == Brightness.dark
+                                                  ? Colors.grey[100]
+                                                  : Colors.black87),
                                           fontSize: 14,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _formatTime(message['timestamp'] as DateTime),
-                                        style: TextStyle(
-                                          color: isUser ? Colors.white70 : Colors.grey[600],
-                                          fontSize: 10,
+                                      // Tampilkan tombol CTA jika ada reportData (SELALU tampilkan tombol jika ada reportData)
+                                      if (!isUser && message['reportData'] != null) ...[
+                                        const SizedBox(height: 12),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: OutlinedButton.icon(
+                                                onPressed: () async {
+                                                  // Navigasi ke edit screen
+                                                  if (message['reportData'] != null) {
+                                                    final draft = message['reportData'] as Map<String, dynamic>;
+                                                    final result = await Navigator.of(context).push(
+                                                      MaterialPageRoute(
+                                                        builder: (_) => CreateReportScreen(
+                                                          initialData: {
+                                                            'title': draft['title'] ?? draft['judul'] ?? '',
+                                                            'description': draft['description'] ?? draft['deskripsi'] ?? '',
+                                                            'location': draft['location'] ?? draft['lokasi'] ?? '',
+                                                            'imageUrl': draft['imageUrl'] ?? draft['image_url'],
+                                                          },
+                                                        ),
+                                                      ),
+                                                    );
+                                                    
+                                                    // Jika report berhasil dibuat dari edit screen
+                                                    if (result == true) {
+                                                      setState(() {
+                                                        _pendingReportDraft = null;
+                                                        // Hapus reportData dari message
+                                                        final messageIndex = _messages.indexWhere((m) => m == message);
+                                                        if (messageIndex != -1) {
+                                                          _messages[messageIndex] = Map<String, dynamic>.from(_messages[messageIndex])
+                                                            ..remove('reportData')
+                                                            ..['awaitingConfirmation'] = false;
+                                                        }
+                                                      });
+                                                      ref.read(reportProvider.notifier).refresh();
+                                                    }
+                                                  }
+                                                },
+                                                icon: Icon(
+                                                  Icons.edit,
+                                                  size: 18,
+                                                  color: Theme.of(context).brightness == Brightness.dark
+                                                      ? Colors.grey[300]
+                                                      : Colors.blue[600],
+                                                ),
+                                                label: const Text('Edit'),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: Theme.of(context).brightness == Brightness.dark
+                                                      ? Colors.grey[300]
+                                                      : Colors.blue[600],
+                                                  side: BorderSide(
+                                                    color: Theme.of(context).brightness == Brightness.dark
+                                                        ? Colors.grey[600]!
+                                                        : Colors.blue[600]!,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: OutlinedButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _pendingReportDraft = null;
+                                                    // Hapus reportData dari message
+                                                    final messageIndex = _messages.indexWhere((m) => m == message);
+                                                    if (messageIndex != -1) {
+                                                      _messages[messageIndex] = Map<String, dynamic>.from(_messages[messageIndex])
+                                                        ..remove('reportData')
+                                                        ..['awaitingConfirmation'] = false;
+                                                    }
+                                                  });
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: Theme.of(context).brightness == Brightness.dark
+                                                      ? Colors.grey[300]
+                                                      : Colors.blue[600],
+                                                  side: BorderSide(
+                                                    color: Theme.of(context).brightness == Brightness.dark
+                                                        ? Colors.grey[600]!
+                                                        : Colors.blue[600]!,
+                                                  ),
+                                                ),
+                                                child: const Text('Batal'),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              flex: 2,
+                                              child: ElevatedButton.icon(
+                                                onPressed: () async {
+                                                  // Langsung kirim pesan konfirmasi ke chatbot
+                                                  if (message['reportData'] != null) {
+                                                    _pendingReportDraft = message['reportData'];
+                                                    
+                                                    // Kirim pesan konfirmasi
+                                                    setState(() {
+                                                      _messages.add({
+                                                        'role': 'user',
+                                                        'content': 'kirim laporan',
+                                                        'timestamp': DateTime.now(),
+                                                      });
+                                                      _isLoading = true;
+                                                    });
+                                                    
+                                                    _scrollToBottom();
+                                                    
+                                                    try {
+                                                      final isNewSession = false;
+                                                      Map<String, double>? location;
+                                                      try {
+                                                        final position = await LocationService().getCurrentLocation();
+                                                        if (position != null) {
+                                                          location = {
+                                                            'latitude': position.latitude,
+                                                            'longitude': position.longitude,
+                                                          };
+                                                        }
+                                                      } catch (e) {
+                                                        debugPrint('Error getting location: $e');
+                                                      }
+                                                      
+                                                      final response = await ApiService().sendChatMessage(
+                                                        'kirim laporan',
+                                                        _prepareMessagesForApi(),
+                                                        newSession: isNewSession,
+                                                        location: location,
+                                                      );
+                                                      
+                                                      setState(() {
+                                                        _messages.add({
+                                                          'role': 'assistant',
+                                                          'content': _removeMarkdown(response.data['response'] ?? response.data['message'] ?? response.data['reply'] ?? 'Laporan berhasil dikirim!'),
+                                                          'timestamp': DateTime.now(),
+                                                        });
+                                                        
+                                                        // Jika report sudah dibuat
+                                                        if (response.data['reportCreated'] == true) {
+                                                          _pendingReportDraft = null;
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(
+                                                              content: Text('Laporan berhasil dibuat via chatbot!'),
+                                                              backgroundColor: Colors.green,
+                                                            ),
+                                                          );
+                                                          ref.read(reportProvider.notifier).refresh();
+                                                        }
+                                                        
+                                                        _isLoading = false;
+                                                      });
+                                                      
+                                                      _scrollToBottom();
+                                                    } catch (e) {
+                                                      setState(() {
+                                                        _messages.add({
+                                                          'role': 'assistant',
+                                                          'content': 'Maaf, terjadi kesalahan saat mengirim laporan. Silakan coba lagi.',
+                                                          'timestamp': DateTime.now(),
+                                                        });
+                                                        _isLoading = false;
+                                                      });
+                                                      _scrollToBottom();
+                                                    }
+                                                  }
+                                                },
+                                                icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                                                label: const Text('Kirim', style: TextStyle(color: Colors.white)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.blue[600],
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
+                                      ],
+                                      if (timestamp != null) ...[
+                                        const SizedBox(height: 8),
+                                        _buildTimestampRow(timestamp, isUser, context),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -458,7 +744,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[700]
+                                        : Colors.grey[300],
                                     shape: BoxShape.circle,
                                   ),
                                   child: Container(
@@ -476,6 +764,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                         ),
                       );
+
+                      if (separatorTimestamp != null) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildDateSeparator(separatorTimestamp, context),
+                            bubble,
+                          ],
+                        );
+                      }
+
+                      return bubble;
                     },
                   ),
           ),
@@ -498,9 +798,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       _messageController.text = suggestion;
                       _sendMessage();
                     },
-                    backgroundColor: Colors.blue[50],
-                    side: BorderSide(color: Colors.blue[200]!),
-                    labelStyle: TextStyle(color: Colors.blue[700]),
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.blue[900]!.withOpacity(0.3)
+                        : Colors.blue[50],
+                    side: BorderSide(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.blue[700]!.withOpacity(0.5)
+                          : Colors.blue[200]!,
+                    ),
+                    labelStyle: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.blue[200]
+                          : Colors.blue[700],
+                    ),
                   );
                 }).toList(),
               ),
@@ -510,10 +820,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).scaffoldBackgroundColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
+                  color: Colors.black.withOpacity(0.1),
                   spreadRadius: 1,
                   blurRadius: 5,
                   offset: const Offset(0, -2),
@@ -535,7 +845,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         borderRadius: BorderRadius.circular(24),
                       ),
                       filled: true,
-                      fillColor: Colors.grey[50],
+                      fillColor: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey[800]
+                          : Colors.grey[50],
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     maxLines: null,
@@ -560,28 +872,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildDraftCard(Map<String, dynamic> draft) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue[50]!, Colors.indigo[50]!],
-        ),
+        gradient: isDark
+            ? null
+            : LinearGradient(
+                colors: [Colors.blue[50]!, Colors.indigo[50]!],
+              ),
+        color: isDark ? Colors.blue[900]!.withOpacity(0.3) : null,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blue[300]!, width: 2),
+        border: Border.all(
+          color: isDark ? Colors.blue[700]!.withOpacity(0.5) : Colors.blue[300]!,
+          width: 2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.edit_note, color: Colors.blue[700], size: 24),
+              Icon(
+                Icons.edit_note,
+                color: isDark ? Colors.blue[300] : Colors.blue[700],
+                size: 24,
+              ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'Draft Laporan',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[100] : Colors.black87,
                 ),
               ),
             ],
@@ -598,13 +922,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 Chip(
                   label: Text('Kategori: ${draft['category'] ?? draft['kategori']}'),
-                  backgroundColor: Colors.blue[100],
+                  backgroundColor: isDark
+                      ? Colors.blue[900]!.withOpacity(0.3)
+                      : Colors.blue[100],
+                  labelStyle: TextStyle(
+                    color: isDark ? Colors.blue[200] : Colors.blue[900],
+                  ),
                 ),
                 const SizedBox(width: 8),
                 if (draft['urgency'] != null || draft['urgensi'] != null)
                   Chip(
                     label: Text('Urgensi: ${draft['urgency'] ?? draft['urgensi']}'),
-                    backgroundColor: Colors.orange[100],
+                    backgroundColor: isDark
+                        ? Colors.orange[900]!.withOpacity(0.3)
+                        : Colors.orange[100],
+                    labelStyle: TextStyle(
+                      color: isDark ? Colors.orange[200] : Colors.orange[900],
+                    ),
                   ),
               ],
             ),
@@ -612,21 +946,139 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Row(
             children: [
               Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    // Navigasi ke edit screen
+                    final result = await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CreateReportScreen(
+                          initialData: {
+                            'title': draft['title'] ?? draft['judul'] ?? '',
+                            'description': draft['description'] ?? draft['deskripsi'] ?? '',
+                            'location': draft['location'] ?? draft['lokasi'] ?? '',
+                            'imageUrl': draft['imageUrl'] ?? draft['image_url'],
+                          },
+                        ),
+                      ),
+                    );
+                    
+                    // Jika report berhasil dibuat dari edit screen
+                    if (result == true) {
+                      setState(() {
+                        _pendingReportDraft = null;
+                      });
+                      ref.read(reportProvider.notifier).refresh();
+                    }
+                  },
+                  icon: Icon(
+                    Icons.edit,
+                    size: 18,
+                    color: isDark ? Colors.grey[300] : Colors.blue[600],
+                  ),
+                  label: const Text('Edit'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark ? Colors.grey[300] : Colors.blue[600],
+                    side: BorderSide(
+                      color: isDark ? Colors.grey[600]! : Colors.blue[600]!,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
                 child: OutlinedButton(
                   onPressed: () {
                     setState(() {
                       _pendingReportDraft = null;
                     });
                   },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark ? Colors.grey[300] : Colors.blue[600],
+                    side: BorderSide(
+                      color: isDark ? Colors.grey[600]! : Colors.blue[600]!,
+                    ),
+                  ),
                   child: const Text('Batal'),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
+                flex: 2,
                 child: ElevatedButton.icon(
-                  onPressed: _createReportFromDraft,
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  label: const Text('Buat Laporan', style: TextStyle(color: Colors.white)),
+                  onPressed: () async {
+                    // Langsung kirim pesan konfirmasi ke chatbot
+                    if (_pendingReportDraft != null) {
+                      setState(() {
+                        _messages.add({
+                          'role': 'user',
+                          'content': 'kirim laporan',
+                          'timestamp': DateTime.now(),
+                        });
+                        _isLoading = true;
+                      });
+                      
+                      _scrollToBottom();
+                      
+                      try {
+                        final isNewSession = false;
+                        Map<String, double>? location;
+                        try {
+                          final position = await LocationService().getCurrentLocation();
+                          if (position != null) {
+                            location = {
+                              'latitude': position.latitude,
+                              'longitude': position.longitude,
+                            };
+                          }
+                        } catch (e) {
+                          debugPrint('Error getting location: $e');
+                        }
+                        
+                        final response = await ApiService().sendChatMessage(
+                          'kirim laporan',
+                          _prepareMessagesForApi(),
+                          newSession: isNewSession,
+                          location: location,
+                        );
+                        
+                        setState(() {
+                          _messages.add({
+                            'role': 'assistant',
+                            'content': _removeMarkdown(response.data['response'] ?? response.data['message'] ?? response.data['reply'] ?? 'Laporan berhasil dikirim!'),
+                            'timestamp': DateTime.now(),
+                          });
+                          
+                          // Jika report sudah dibuat
+                          if (response.data['reportCreated'] == true) {
+                            _pendingReportDraft = null;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Laporan berhasil dibuat via chatbot!'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            ref.read(reportProvider.notifier).refresh();
+                          }
+                          
+                          _isLoading = false;
+                        });
+                        
+                        _scrollToBottom();
+                      } catch (e) {
+                        setState(() {
+                          _messages.add({
+                            'role': 'assistant',
+                            'content': 'Maaf, terjadi kesalahan saat mengirim laporan. Silakan coba lagi.',
+                            'timestamp': DateTime.now(),
+                          });
+                          _isLoading = false;
+                        });
+                        _scrollToBottom();
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                  label: const Text('Kirim', style: TextStyle(color: Colors.white)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue[600],
                     foregroundColor: Colors.white,
@@ -641,6 +1093,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildDraftField(String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -651,20 +1104,92 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.grey[700],
+              color: isDark ? Colors.grey[300] : Colors.grey[700],
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(fontSize: 14),
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.grey[200] : Colors.black87,
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildTimestampRow(DateTime timestamp, bool isUser, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color textColor = isUser
+        ? Colors.white.withOpacity(0.85)
+        : (isDark ? Colors.grey[400]! : Colors.grey[600]!);
+
+    return Row(
+      mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.schedule_rounded,
+          size: 14,
+          color: isUser
+              ? Colors.white70
+              : (isDark ? Colors.grey[500] : Colors.grey[500]),
+        ),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            _formatDetailedTimestamp(timestamp),
+            style: TextStyle(
+              color: textColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateSeparator(DateTime timestamp, BuildContext context) {
+    final label = _formatDateHeader(timestamp);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.grey[200]! : Colors.grey[700]!;
+    final dividerColor = isDark ? Colors.grey[600]! : Colors.grey[300]!;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: dividerColor)),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Divider(color: dividerColor)),
+        ],
+      ),
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime dateTime) {
+    return DateFormat('EEEE, d MMM yyyy', 'id_ID').format(dateTime);
+  }
+
+  String _formatDetailedTimestamp(DateTime dateTime) {
+    final datePart = DateFormat('d MMM yyyy', 'id_ID').format(dateTime);
+    final timePart = DateFormat('HH:mm', 'id_ID').format(dateTime);
+    return '$datePart • $timePart WIB';
   }
 }

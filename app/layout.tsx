@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
+import ErrorBoundaryClient from "@/components/ErrorBoundaryClient";
 
 // Font Inter untuk body text (clean & modern)
 const inter = Inter({
@@ -33,7 +34,9 @@ export default function RootLayout({
         className={`${inter.variable} ${poppins.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
-        {children}
+        <ErrorBoundaryClient>
+          {children}
+        </ErrorBoundaryClient>
       </body>
     </html>
   );

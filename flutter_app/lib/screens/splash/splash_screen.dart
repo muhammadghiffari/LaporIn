@@ -18,6 +18,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  bool _hasNavigated = false;
 
   @override
   void initState() {
@@ -46,24 +47,84 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     _animationController.forward();
 
-    // Navigate setelah 3 detik
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        _navigateToNext();
+    // Wait for auth state to load, then navigate
+    _waitForAuthAndNavigate();
+  }
+
+  Future<void> _waitForAuthAndNavigate() async {
+    // Wait minimum 1.5 seconds for splash animation
+    await Future.delayed(const Duration(milliseconds: 1500));
+    
+    if (!mounted || _hasNavigated) return;
+    
+    // Wait for auth state to be loaded from storage
+    // Check auth state multiple times to ensure it's loaded
+    int attempts = 0;
+    const maxAttempts = 15; // Max 1.5 seconds wait (15 * 100ms)
+    
+    while (attempts < maxAttempts && !_hasNavigated) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      if (!mounted || _hasNavigated) return;
+      
+      try {
+        final authState = ref.read(authProvider);
+        
+        // Check if auth is loaded
+        // Auth is loaded if we can determine authentication status
+        final hasToken = authState.token != null;
+        final hasUser = authState.user != null;
+        
+        // Auth is loaded if:
+        // 1. We have both token and user (authenticated)
+        // 2. We have neither token nor user (not authenticated, loading complete)
+        if ((hasToken && hasUser) || (!hasToken && !hasUser)) {
+          if (mounted && !_hasNavigated) {
+            _hasNavigated = true;
+            _navigateToNext();
+            return;
+          }
+        }
+      } catch (e) {
+        print('⚠️ Splash: Error reading auth state: $e');
+        // Continue waiting or force navigation
       }
-    });
+      
+      attempts++;
+    }
+    
+    // Fallback: navigate after max wait time (force navigation)
+    if (mounted && !_hasNavigated) {
+      print('⚠️ Splash: Timeout waiting for auth, forcing navigation');
+      _hasNavigated = true;
+      _navigateToNext();
+    }
   }
 
   void _navigateToNext() {
-    final authState = ref.read(authProvider);
+    if (!mounted) return;
     
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => authState.isAuthenticated
-            ? const DashboardScreen()
-            : const LoginScreen(),
-      ),
-    );
+    // Use WidgetsBinding to ensure navigation happens after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      final authState = ref.read(authProvider);
+      
+      // Navigate based on auth state
+      final isAuthenticated = authState.isAuthenticated && 
+                              authState.user != null && 
+                              authState.token != null;
+      
+      print('🚀 Splash: Navigating to ${isAuthenticated ? "Dashboard" : "Login"}');
+      
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => isAuthenticated
+              ? const DashboardScreen()
+              : const LoginScreen(),
+        ),
+      );
+    });
   }
 
   @override
@@ -75,7 +136,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFFF5F5F5), // Elegant off-white with slight gray tint
       body: Center(
         child: AnimatedBuilder(
           animation: _animationController,
@@ -98,6 +159,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           color: const Color(0xFF0099CC), // Darker blue outline
                           width: 3,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00D4FF).withOpacity(0.3),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
                       ),
                       child: Stack(
                         alignment: Alignment.center,
@@ -151,7 +219,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Color(0xFF00D4FF),
                         ),
-                        strokeWidth: 2,
+                        strokeWidth: 2.5,
                       ),
                     ),
                   ],

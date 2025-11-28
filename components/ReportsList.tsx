@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import api from '@/lib/api';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -18,6 +18,7 @@ interface Report {
   category?: string;
   blockchain_tx_hash?: string;
   is_mock_blockchain?: boolean; // Flag untuk mock blockchain
+  is_sensitive?: boolean; // Laporan sensitif/rahasia
   user_name?: string;
   user_email?: string;
   rt_rw?: string;
@@ -28,11 +29,11 @@ interface ReportsListProps {
   filter?: Record<string, string>;
 }
 
-export default function ReportsList({ filter }: ReportsListProps) {
+function ReportsList({ filter }: ReportsListProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const filterKey = JSON.stringify(filter || {});
+  const filterKey = useMemo(() => JSON.stringify(filter || {}), [filter]);
   const { toasts, error: showError, removeToast } = useToast();
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export default function ReportsList({ filter }: ReportsListProps) {
     return () => window.removeEventListener('report-created', handler as EventListener);
   }, [filterKey]);
 
-  const fetchReports = async (isBackgroundRefresh = false) => {
+  const fetchReports = useCallback(async (isBackgroundRefresh = false) => {
     if (!isBackgroundRefresh) {
       setLoading(true);
     }
@@ -145,7 +146,7 @@ export default function ReportsList({ filter }: ReportsListProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, filterKey, showError]);
 
   if (loading) return <ReportsListSkeleton count={5} />;
 
@@ -159,8 +160,8 @@ export default function ReportsList({ filter }: ReportsListProps) {
             fill
             sizes="(max-width: 768px) 100vw, 50vw"
             className="object-cover rounded-xl"
-            unoptimized
-            priority
+            loading="lazy"
+            quality={75}
           />
         </div>
         <h3 className="text-2xl font-bold text-gray-900 mb-2">Belum ada laporan</h3>
@@ -190,7 +191,17 @@ export default function ReportsList({ filter }: ReportsListProps) {
         >
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <h3 className="font-semibold text-lg text-gray-900">{report.title}</h3>
+              <div className="flex items-start gap-2 mb-1">
+                <h3 className="font-semibold text-lg text-gray-900 flex-1">{report.title}</h3>
+                {report.is_sensitive && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-xs font-semibold border border-orange-300">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    SENSITIF
+                  </span>
+                )}
+              </div>
               <p className="text-gray-700 text-sm mt-1">
                 {report.description.substring(0, 100)}...
               </p>
@@ -291,4 +302,6 @@ export default function ReportsList({ filter }: ReportsListProps) {
     </>
   );
 }
+
+export default memo(ReportsList);
 

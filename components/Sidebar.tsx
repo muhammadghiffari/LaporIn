@@ -14,6 +14,7 @@ import {
   X,
   Menu,
   MapPin,
+  UserCheck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -33,6 +34,12 @@ const navItems: NavItem[] = [
     roles: ['admin'],
   },
   {
+    name: 'Data Warga',
+    href: '/warga',
+    icon: UserCheck,
+    roles: ['admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'],
+  },
+  {
     name: 'Analytics',
     href: '/analytics',
     icon: BarChart3,
@@ -42,7 +49,7 @@ const navItems: NavItem[] = [
     name: 'Peta Laporan',
     href: '/admin/peta-laporan',
     icon: MapPin,
-    roles: ['admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'],
+    roles: ['admin', 'admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'],
   },
   { name: 'Pengaturan', href: '/pengaturan', icon: Settings },
 ];
@@ -115,7 +122,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               {user?.role === 'warga'
                 ? 'Warga'
                 : user?.role === 'admin'
-                ? 'Admin Sistem'
+                ? 'Superadmin'
                 : user?.role === 'admin_rw'
                 ? 'Admin RW'
                 : user?.role === 'ketua_rt'

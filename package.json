@@ -14,6 +14,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
+    "@mui/x-data-grid": "^8.20.0",
     "@react-google-maps/api": "^2.20.7",
     "axios": "^1.6.2",
     "chart.js": "^4.5.1",
@@ -26,6 +27,7 @@
     "react-hook-form": "^7.49.2",
     "react-markdown": "^10.1.0",
     "socket.io-client": "^4.8.1",
+    "xlsx": "^0.18.5",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

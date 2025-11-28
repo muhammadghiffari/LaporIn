@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/report_provider.dart';
@@ -24,7 +25,8 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(reportProvider.notifier).fetchReports();
+      // Always refresh on init to prevent duplicates
+      ref.read(reportProvider.notifier).fetchReports(refresh: true);
     });
   }
 
@@ -57,23 +59,6 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
     _selectedCategory = null;
     _selectedUrgency = null;
     ref.read(reportProvider.notifier).fetchReports(refresh: true);
-  }
-
-  String _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'orange';
-      case 'in_progress':
-      case 'processing':
-        return 'blue';
-      case 'resolved':
-      case 'completed':
-        return 'green';
-      case 'cancelled':
-        return 'red';
-      default:
-        return 'grey';
-    }
   }
 
   Color _getStatusColorWidget(String status) {
@@ -150,7 +135,7 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
         // Search & Filter Bar
         Container(
           padding: const EdgeInsets.all(16),
-          color: Colors.white,
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: Column(
             children: [
               TextField(
@@ -172,7 +157,9 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   filled: true,
-                  fillColor: Colors.grey[50],
+                  fillColor: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[800]
+                      : Colors.grey[50],
                 ),
                 onChanged: (value) {
                   setState(() {});
@@ -245,13 +232,16 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
   }
 
   Widget _buildFilterOptions() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: isDark ? Colors.grey[800] : Colors.grey[50],
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(
+          color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -259,11 +249,12 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
           // Status Filter
           DropdownButtonFormField<String>(
             value: _selectedStatus,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Status',
-              prefixIcon: Icon(Icons.filter_list),
+              labelStyle: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700]),
+              prefixIcon: Icon(Icons.filter_list, color: isDark ? Colors.grey[300] : Colors.grey[700]),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: isDark ? Colors.grey[900] : Colors.white,
             ),
             items: [
               const DropdownMenuItem(value: null, child: Text('Semua Status')),
@@ -281,11 +272,12 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
           // Category Filter (tetap ada untuk filter, tapi tidak untuk input)
           DropdownButtonFormField<String>(
             value: _selectedCategory,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Kategori',
-              prefixIcon: Icon(Icons.category),
+              labelStyle: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700]),
+              prefixIcon: Icon(Icons.category, color: isDark ? Colors.grey[300] : Colors.grey[700]),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: isDark ? Colors.grey[900] : Colors.white,
             ),
             items: [
               const DropdownMenuItem(value: null, child: Text('Semua Kategori')),
@@ -305,11 +297,12 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
           // Urgency Filter (tetap ada untuk filter, tapi tidak untuk input)
           DropdownButtonFormField<String>(
             value: _selectedUrgency,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Urgensi',
-              prefixIcon: Icon(Icons.priority_high),
+              labelStyle: TextStyle(color: isDark ? Colors.grey[300] : Colors.grey[700]),
+              prefixIcon: Icon(Icons.priority_high, color: isDark ? Colors.grey[300] : Colors.grey[700]),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: isDark ? Colors.grey[900] : Colors.white,
             ),
             items: [
               const DropdownMenuItem(value: null, child: Text('Semua Urgensi')),
@@ -344,6 +337,14 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Image thumbnail
+              if (report.imageUrl != null && report.imageUrl!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: _buildImageThumbnail(report.imageUrl!),
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   Expanded(
@@ -355,18 +356,51 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
                       ),
                     ),
                   ),
+                  if (report.isSensitive)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.orange[900]!.withOpacity(0.3)
+                            : Colors.orange[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.orange[700]!,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock, size: 12, color: Colors.orange[700]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'SENSITIF',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: _getStatusColorWidget(report.status)
-                          .withOpacity(0.1),
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? _getStatusColorWidget(report.status).withOpacity(0.2)
+                          : _getStatusColorWidget(report.status).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: _getStatusColorWidget(report.status)
-                            .withOpacity(0.3),
+                            .withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.5 : 0.3),
                       ),
                     ),
                     child: Text(
@@ -385,7 +419,11 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
                 report.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
+                ),
               ),
               const SizedBox(height: 8),
               Row(
@@ -447,6 +485,72 @@ class _ReportsListScreenState extends ConsumerState<ReportsListScreen> {
       return '${difference.inMinutes} menit lalu';
     } else {
       return 'Baru saja';
+    }
+  }
+
+  Widget _buildImageThumbnail(String imageUrl) {
+    // Check if it's a base64 data URL or regular URL
+    if (imageUrl.startsWith('data:image') || imageUrl.startsWith('/9j/') || imageUrl.length > 1000) {
+      // Base64 image
+      try {
+        String base64String = imageUrl;
+        
+        // Remove data URL prefix if exists
+        if (base64String.contains(',')) {
+          base64String = base64String.split(',')[1];
+        }
+        
+        final imageBytes = base64Decode(base64String);
+        return Image.memory(
+          imageBytes,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: 200,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: 200,
+              color: Colors.grey[200],
+              child: Icon(Icons.broken_image, color: Colors.grey[400]),
+            );
+          },
+        );
+      } catch (e) {
+        return Container(
+          height: 200,
+          color: Colors.grey[200],
+          child: Icon(Icons.broken_image, color: Colors.grey[400]),
+        );
+      }
+    } else {
+      // Regular URL (HTTP/HTTPS)
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: 200,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 200,
+            color: Colors.grey[200],
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: 200,
+            color: Colors.grey[200],
+            child: Icon(Icons.broken_image, color: Colors.grey[400]),
+          );
+        },
+      );
     }
   }
 }

@@ -12,6 +12,13 @@ class ApiConfig {
   static const String register = '/auth/register';
   static const String verifyFace = '/auth/verify-face';
   static const String registerFace = '/auth/register-face';
+  static const String faceDetect = '/auth/face/detect'; // Detect face dari foto (real-time, no auth)
+  static const String faceRegister = '/auth/face/register'; // Upload foto, extract embedding otomatis
+  static const String faceVerify = '/auth/face/verify'; // Upload foto, verify otomatis
+  static const String sendVerificationCode = '/auth/send-verification-code'; // Send OTP via email
+  static const String verifyCode = '/auth/verify-code'; // Verify OTP code
+  static const String updateProfile = '/auth/profile'; // Update user profile
+  static const String changePassword = '/auth/password'; // Change password
   static const String reports = '/reports';
   static const String reportStats = '/reports/stats';
   static const String chat = '/chat';

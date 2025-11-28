@@ -46,7 +46,8 @@ class ReportNotifier extends StateNotifier<ReportState> {
   final ApiService _apiService = ApiService();
 
   ReportNotifier() : super(ReportState()) {
-    fetchReports();
+    // Don't auto-fetch in constructor to prevent duplicate calls
+    // Let screens call fetchReports explicitly
   }
 
   Future<void> fetchReports({Map<String, dynamic>? filters, bool refresh = false}) async {
@@ -86,8 +87,19 @@ class ReportNotifier extends StateNotifier<ReportState> {
         total = data['total'] ?? reports.length;
       }
 
+      // Deduplicate reports by ID to prevent duplicates
+      List<Report> finalReports;
+      if (refresh) {
+        finalReports = reports;
+      } else {
+        // Merge with existing reports and remove duplicates by ID
+        final existingIds = state.reports.map((r) => r.id).toSet();
+        final newReports = reports.where((r) => !existingIds.contains(r.id)).toList();
+        finalReports = [...state.reports, ...newReports];
+      }
+
       state = state.copyWith(
-        reports: refresh ? reports : [...state.reports, ...reports],
+        reports: finalReports,
         isLoading: false,
         total: total,
       );
@@ -109,8 +121,14 @@ class ReportNotifier extends StateNotifier<ReportState> {
           : <String, dynamic>{};
       final newReport = Report.fromJson(responseData);
 
+      // Check if report already exists to prevent duplicates
+      final existingIds = state.reports.map((r) => r.id).toSet();
+      final updatedReports = existingIds.contains(newReport.id)
+          ? state.reports.map((r) => r.id == newReport.id ? newReport : r).toList()
+          : [newReport, ...state.reports];
+
       state = state.copyWith(
-        reports: [newReport, ...state.reports],
+        reports: updatedReports,
         isLoading: false,
         lastResponse: responseData, // Store response untuk access locationWarning
       );
@@ -156,6 +174,7 @@ class ReportNotifier extends StateNotifier<ReportState> {
               userName: report.userName,
               userEmail: report.userEmail,
               rtRw: report.rtRw,
+              isSensitive: report.isSensitive, // Preserve isSensitive status
             );
           }
           return report;

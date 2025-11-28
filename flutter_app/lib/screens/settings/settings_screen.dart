@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
-import '../../config/api_config.dart';
+import '../../providers/theme_provider.dart';
+import '../security/face_enrollment_screen.dart';
+import 'edit_profile_screen.dart';
+import 'change_password_screen.dart';
+import 'help_screen.dart';
+import 'privacy_policy_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -10,6 +15,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
+    final hasFaceRegistered = user?.hasFaceRegistered ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -65,9 +71,17 @@ class SettingsScreen extends ConsumerWidget {
                             Chip(
                               label: Text(
                                 user?.role.toUpperCase() ?? 'USER',
-                                style: const TextStyle(fontSize: 10),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.blue[200]
+                                      : Colors.blue[900],
+                                ),
                               ),
-                              backgroundColor: Colors.blue[50],
+                              backgroundColor: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue[900]?.withOpacity(0.3)
+                                  : Colors.blue[50],
                             ),
                           ],
                         ),
@@ -76,6 +90,59 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Security & 2FA
+          const Text(
+            'Keamanan & 2FA',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(
+                    hasFaceRegistered ? Icons.verified_user : Icons.shield_outlined,
+                    color: hasFaceRegistered ? Colors.green : Colors.orange,
+                  ),
+                  title: const Text('Verifikasi Wajah'),
+                  subtitle: Text(
+                    hasFaceRegistered
+                        ? 'Aktif • Login Anda membutuhkan verifikasi wajah'
+                        : 'Belum aktif • Daftarkan wajah untuk keamanan ekstra',
+                  ),
+                  trailing: ElevatedButton(
+                    onPressed: () async {
+                      final result = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => const FaceEnrollmentScreen(),
+                        ),
+                      );
+                      if (result == true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('2FA wajah berhasil diperbarui.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          hasFaceRegistered ? Colors.green[600] : Colors.blue[600],
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text(hasFaceRegistered ? 'Perbarui' : 'Aktifkan'),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -99,9 +166,10 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: const Text('Lihat dan edit profil'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Navigate to profile edit
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur sedang dikembangkan')),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EditProfileScreen(),
+                      ),
                     );
                   },
                 ),
@@ -112,9 +180,10 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: const Text('Ganti password akun'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Navigate to change password
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur sedang dikembangkan')),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen(),
+                      ),
                     );
                   },
                 ),
@@ -141,9 +210,18 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Notifikasi'),
                   subtitle: const Text('Pengaturan notifikasi'),
                   trailing: Switch(
-                    value: true,
+                    value: true, // TODO: Load from SharedPreferences
                     onChanged: (value) {
-                      // TODO: Implement notification settings
+                      // TODO: Save to SharedPreferences and implement push notifications
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            value
+                                ? 'Notifikasi diaktifkan'
+                                : 'Notifikasi dinonaktifkan',
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -152,35 +230,17 @@ class SettingsScreen extends ConsumerWidget {
                   leading: const Icon(Icons.dark_mode, color: Colors.blue),
                   title: const Text('Mode Gelap'),
                   subtitle: const Text('Tema aplikasi'),
-                  trailing: Switch(
-                    value: false,
-                    onChanged: (value) {
-                      // TODO: Implement dark mode
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Fitur sedang dikembangkan')),
+                  trailing: Consumer(
+                    builder: (context, ref, child) {
+                      final themeNotifier = ref.watch(themeProvider.notifier);
+                      return Switch(
+                        value: themeNotifier.isDarkMode,
+                        onChanged: (value) {
+                          themeNotifier.toggleTheme();
+                        },
                       );
                     },
                   ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.language, color: Colors.blue),
-                  title: const Text('Bahasa'),
-                  subtitle: const Text('Pilih bahasa'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Indonesia'),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.chevron_right),
-                    ],
-                  ),
-                  onTap: () {
-                    // TODO: Language selection
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur sedang dikembangkan')),
-                    );
-                  },
                 ),
               ],
             ),
@@ -224,9 +284,10 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: const Text('FAQ dan panduan'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Help screen
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur sedang dikembangkan')),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const HelpScreen(),
+                      ),
                     );
                   },
                 ),
@@ -236,50 +297,14 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Kebijakan Privasi'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // TODO: Privacy policy
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Fitur sedang dikembangkan')),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyPolicyScreen(),
+                      ),
                     );
                   },
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // API Info (for debugging)
-          Card(
-            color: Colors.grey[100],
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.api, color: Colors.grey[700], size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'API Configuration',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Base URL: ${ApiConfig.baseUrl}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 24),

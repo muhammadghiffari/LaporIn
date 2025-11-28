@@ -6,32 +6,26 @@ import useAuthStore from '@/store/authStore';
 import api from '@/lib/api';
 import Layout from '@/components/Layout';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Chip,
   Button,
   Box,
   Typography,
-  Pagination,
   TextField,
   InputAdornment,
   IconButton,
-  Skeleton,
+  Tooltip,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Visibility as VisibilityIcon,
-  Edit as EditIcon,
   Block as BlockIcon,
+  FileDownload,
 } from '@mui/icons-material';
+import { DataGrid, GridColDef, GridActionsCellItem, GridToolbar } from '@mui/x-data-grid';
 import Link from 'next/link';
-import Image from 'next/image';
 import { CheckCircle2 } from 'lucide-react';
+import { exportToExcel, formatReportsForExcel } from '@/lib/exportToExcel';
 
 interface Laporan {
   id: number;
@@ -74,12 +68,9 @@ export default function LaporanPage() {
   const [laporan, setLaporan] = useState<Laporan[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterUrgency, setFilterUrgency] = useState<string>('');
-  const itemsPerPage = 10;
 
   const hasCheckedAuth = useAuthStore((s) => s.hasCheckedAuth);
 
@@ -98,7 +89,7 @@ export default function LaporanPage() {
     if (hasCheckedAuth && isAuthenticated) {
       fetchLaporan();
     }
-  }, [hasCheckedAuth, isAuthenticated, page, search, filterStatus, filterUrgency]);
+  }, [hasCheckedAuth, isAuthenticated, search, filterStatus, filterUrgency]);
 
   // Realtime polling - refresh setiap 10 detik untuk update realtime
   useEffect(() => {
@@ -113,7 +104,7 @@ export default function LaporanPage() {
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCheckedAuth, isAuthenticated, page, search, filterStatus, filterUrgency]);
+  }, [hasCheckedAuth, isAuthenticated, search, filterStatus, filterUrgency]);
 
   const fetchLaporan = async (isBackgroundRefresh = false) => {
     try {
@@ -132,8 +123,8 @@ export default function LaporanPage() {
       if (filterStatus) params.append('status', filterStatus);
       if (filterUrgency) params.append('urgency', filterUrgency);
       
-      params.append('limit', itemsPerPage.toString());
-      params.append('offset', ((page - 1) * itemsPerPage).toString());
+      // Fetch more data untuk client-side filtering/sorting (DataGrid akan handle pagination)
+      params.append('limit', '1000'); // Fetch banyak data, DataGrid handle pagination
 
       if (search) {
         params.append('search', search);
@@ -144,18 +135,14 @@ export default function LaporanPage() {
       
       // Handle both old format (array) and new format (object with data, total, page)
       let reports: Laporan[] = [];
-      let total = 0;
       
       if (Array.isArray(data)) {
         reports = data;
-        total = data.length;
       } else if (data && data.data) {
         reports = data.data;
-        total = data.total || data.data.length;
       }
       
       setLaporan(reports);
-      setTotalPages(Math.ceil(total / itemsPerPage) || 1);
     } catch (error) {
       console.error('Error fetching laporan:', error);
     } finally {
@@ -191,300 +178,273 @@ export default function LaporanPage() {
           </div>
         )}
 
-        {/* Filters & Search */}
-        <Box className="mb-6 bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-          <div className={`grid grid-cols-1 ${isPengurus ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-4`}>
-            <TextField
-              fullWidth
-              size="medium"
-              placeholder="Cari laporan, pelapor, atau lokasi..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+        {/* Header dengan Export Button */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box />
+          {laporan.length > 0 && (
+            <Button
               variant="outlined"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon className="text-gray-400" />
-                  </InputAdornment>
-                ),
+              startIcon={<FileDownload />}
+              onClick={() => {
+                const formattedData = formatReportsForExcel(laporan);
+                exportToExcel(formattedData, 'daftar_laporan', 'Daftar Laporan');
               }}
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  backgroundColor: '#f9fafb',
-                  '&:hover': {
-                    backgroundColor: '#f3f4f6',
-                  },
-                  '&.Mui-focused': {
-                    backgroundColor: '#ffffff',
-                  },
+                borderColor: '#3B82F6',
+                color: '#3B82F6',
+                '&:hover': {
+                  borderColor: '#2563EB',
+                  bgcolor: '#EFF6FF',
                 },
               }}
-            />
-            {isPengurus && (
-              <>
-                <TextField
-                  fullWidth
-                  size="medium"
-                  select
-                  // label="Filter Status"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  variant="outlined"
-                  SelectProps={{ native: true }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
-                      backgroundColor: '#f9fafb',
-                      '&:hover': {
-                        backgroundColor: '#f3f4f6',
-                      },
-                      '&.Mui-focused': {
-                        backgroundColor: '#ffffff',
-                      },
-                    },
-                  }}
-                >
-                  <option value="">Semua Status</option>
-                  <option value="pending">Menunggu</option>
-                  <option value="in_progress">Sedang Diproses</option>
-                  <option value="resolved">Selesai</option>
-                  <option value="rejected">Ditolak</option>
-                </TextField>
-                <TextField
-                  fullWidth
-                  size="medium"
-                  select
-                  // label="Filter Urgensi"
-                  value={filterUrgency}
-                  onChange={(e) => setFilterUrgency(e.target.value)}
-                  variant="outlined"
-                  SelectProps={{ native: true }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 3,
-                      backgroundColor: '#f9fafb',
-                      '&:hover': {
-                        backgroundColor: '#f3f4f6',
-                      },
-                      '&.Mui-focused': {
-                        backgroundColor: '#ffffff',
-                      },
-                    },
-                  }}
-                >
-                  <option value="">Semua Urgensi</option>
-                  <option value="high">Tinggi</option>
-                  <option value="medium">Sedang</option>
-                  <option value="low">Rendah</option>
-                </TextField>
-              </>
-            )}
-          </div>
+            >
+              Export Excel
+            </Button>
+          )}
         </Box>
 
-        {/* Table */}
-        <TableContainer component={Paper} className="shadow-sm rounded-2xl border border-gray-200 overflow-hidden">
-          <Table>
-            <TableHead className="bg-gray-50">
-              <TableRow>
-                <TableCell className="font-semibold">Judul Laporan</TableCell>
-                {user?.role === 'warga' ? null : (
-                  <TableCell className="font-semibold">Pelapor</TableCell>
-                )}
-                <TableCell className="font-semibold">Kategori</TableCell>
-                <TableCell className="font-semibold">Urgensi</TableCell>
-                <TableCell className="font-semibold">Status</TableCell>
-                {user?.role === 'admin' || user?.role === 'pengurus' ? (
-                <TableCell className="font-semibold">Blockchain</TableCell>
-                ) : null}
-                <TableCell className="font-semibold">Tanggal</TableCell>
-                <TableCell className="font-semibold text-center">Aksi</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton variant="text" width="100%" /></TableCell>
-                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                    {(user?.role === 'admin' || user?.role === 'pengurus') && (
-                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
+        {/* DataGrid Table */}
+        <Paper
+          elevation={0}
+          sx={{
+            height: 600,
+            width: '100%',
+            border: '1px solid #E5E7EB',
+            borderRadius: 3,
+            '& .MuiDataGrid-root': {
+              border: 'none',
+            },
+            '& .MuiDataGrid-cell': {
+              borderBottom: '1px solid #F3F4F6',
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: '#F9FAFB',
+              borderBottom: '2px solid #E5E7EB',
+            },
+            '& .MuiDataGrid-footerContainer': {
+              borderTop: '1px solid #E5E7EB',
+            },
+          }}
+        >
+          <DataGrid
+            rows={laporan}
+            columns={[
+              {
+                field: 'title',
+                headerName: 'Judul Laporan',
+                flex: 2,
+                minWidth: 200,
+                filterable: true,
+                renderCell: (params) => (
+                  <Box>
+                    <Box sx={{ fontWeight: 600, color: 'text.primary' }}>
+                      {params.row.title}
+                    </Box>
+                    <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
+                      {params.row.description?.substring(0, 100)}
+                      {params.row.description?.length > 100 ? '...' : ''}
+                    </Box>
+                    {params.row.location && (
+                      <Box sx={{ fontSize: '0.75rem', color: 'text.disabled', mt: 0.5 }}>
+                        📍 {params.row.location}
+                      </Box>
                     )}
-                    <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                    <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                  </TableRow>
-                ))
-              ) : laporan.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={
-                    (user?.role === 'admin' || user?.role === 'pengurus') ? 8 : 
-                    (user?.role === 'warga') ? 6 : 7
-                  } className="text-center py-12">
-                    <div className="flex flex-col items-center gap-4">
-                      <Image
-                        src="https://images.unsplash.com/photo-1503264116251-35a269479413?q=80&w=1280&auto=format&fit=crop"
-                        alt="Tidak ada laporan"
-                        width={300}
-                        height={200}
-                        className="rounded-lg"
-                        unoptimized
-                      />
-                      <Typography variant="body1" className="text-gray-600">
-                        Tidak ada laporan ditemukan
+                  </Box>
+                ),
+              },
+              ...(user?.role !== 'warga' ? [{
+                field: 'user_name',
+                headerName: 'Pelapor',
+                width: 180,
+                filterable: true,
+                renderCell: (params) => (
+                  <Box>
+                    <Box sx={{ fontWeight: 600, color: 'text.primary' }}>
+                      {params.row.user_name || 'Tidak diketahui'}
+                    </Box>
+                    {params.row.user_email && (user?.role === 'admin' || user?.role === 'pengurus') && (
+                      <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        {params.row.user_email}
+                      </Box>
+                    )}
+                  </Box>
+                ),
+              }] : []),
+              {
+                field: 'category',
+                headerName: 'Kategori',
+                width: 140,
+                filterable: true,
+                renderCell: (params) => (
+                  <Chip
+                    label={CATEGORY_LABELS[params.value] || params.value || 'Belum diproses'}
+                    size="small"
+                  />
+                ),
+              },
+              {
+                field: 'urgency',
+                headerName: 'Urgensi',
+                width: 130,
+                type: 'singleSelect',
+                valueOptions: ['high', 'medium', 'low'],
+                filterable: true,
+                renderCell: (params) => {
+                  if (!params.value || !URGENCY_COLORS[params.value]) return null;
+                  const color = URGENCY_COLORS[params.value];
+                  return (
+                    <Chip
+                      label={color.label}
+                      size="small"
+                      sx={{
+                        bgcolor: color.bg,
+                        color: color.text,
+                        fontWeight: 600,
+                      }}
+                    />
+                  );
+                },
+              },
+              {
+                field: 'status',
+                headerName: 'Status',
+                width: 140,
+                type: 'singleSelect',
+                valueOptions: ['pending', 'in_progress', 'resolved', 'rejected', 'cancelled'],
+                filterable: true,
+                renderCell: (params) => {
+                  if (!params.value || !STATUS_COLORS[params.value]) return null;
+                  const color = STATUS_COLORS[params.value];
+                  return (
+                    <Chip
+                      label={color.label}
+                      size="small"
+                      sx={{
+                        bgcolor: color.bg,
+                        color: color.text,
+                        fontWeight: 600,
+                      }}
+                    />
+                  );
+                },
+              },
+              ...((user?.role === 'admin' || user?.role === 'pengurus') ? [{
+                field: 'blockchain_tx_hash',
+                headerName: 'Blockchain',
+                width: 160,
+                filterable: false,
+                renderCell: (params) => {
+                  if (!params.value) {
+                    return (
+                      <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                        Belum tercatat
                       </Typography>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                laporan.map((item) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>
-                      <div>
-                        <Typography variant="body2" className="font-medium">
-                          {item.title}
+                    );
+                  }
+                  if (params.row.is_mock_blockchain) {
+                    return (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.disabled' }}>
+                        <BlockIcon fontSize="small" />
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                          {params.value.substring(0, 8)}...
                         </Typography>
-                        <Typography variant="caption" className="text-gray-500 line-clamp-1">
-                          {item.description.substring(0, 80)}...
+                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                          (Mock)
                         </Typography>
-                        {item.location && (
-                          <Typography variant="caption" className="text-gray-400 block mt-1">
-                            📍 {item.location}
-                          </Typography>
-                        )}
-                      </div>
-                    </TableCell>
-                    {user?.role !== 'warga' && (
-                      <TableCell>
-                        <div>
-                          <Typography variant="body2" className="font-semibold text-gray-900">
-                            {item.user_name || 'Tidak diketahui'}
-                          </Typography>
-                          {/* Email hanya untuk admin/pengurus */}
-                          {item.user_email && (user?.role === 'admin' || user?.role === 'pengurus') && (
-                            <Typography variant="caption" className="text-gray-500 block">
-                              {item.user_email}
-                            </Typography>
-                          )}
-                          {item.blockchain_tx_hash && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <CheckCircle2 className="w-3 h-3 text-green-600" />
-                              <Typography variant="caption" className="text-green-600 text-xs font-semibold">
-                                Terverifikasi Blockchain
-                          </Typography>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <Chip
-                        label={CATEGORY_LABELS[item.category || ''] || item.category || 'Belum diproses'}
-                        size="small"
-                        className="text-xs"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {item.urgency && URGENCY_COLORS[item.urgency] && (
-                        <Chip
-                          label={URGENCY_COLORS[item.urgency].label}
-                          size="small"
-                          style={{
-                            backgroundColor: URGENCY_COLORS[item.urgency].bg,
-                            color: URGENCY_COLORS[item.urgency].text,
-                          }}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {STATUS_COLORS[item.status] && (
-                        <Chip
-                          label={STATUS_COLORS[item.status].label}
-                          size="small"
-                          style={{
-                            backgroundColor: STATUS_COLORS[item.status].bg,
-                            color: STATUS_COLORS[item.status].text,
-                          }}
-                        />
-                      )}
-                    </TableCell>
-                    {(user?.role === 'admin' || user?.role === 'pengurus') && (
-                    <TableCell>
-                      {item.blockchain_tx_hash ? (
-                          item.is_mock_blockchain ? (
-                            <div className="flex items-center gap-1 text-gray-500">
-                              <BlockIcon fontSize="small" />
-                              <Typography variant="caption" className="font-mono text-xs">
-                                {item.blockchain_tx_hash.substring(0, 8)}...
-                              </Typography>
-                              <Typography variant="caption" className="text-xs text-gray-400">
-                                (Mock)
-                              </Typography>
-                            </div>
-                          ) : (
-                        <a
-                          href={`https://amoy.polygonscan.com/tx/${item.blockchain_tx_hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Verifikasi di Blockchain Explorer"
-                          className="flex items-center gap-1 text-purple-600 hover:text-purple-800"
-                        >
-                          <BlockIcon fontSize="small" />
-                          <Typography variant="caption" className="font-mono text-xs">
-                            {item.blockchain_tx_hash.substring(0, 8)}...
-                          </Typography>
-                        </a>
-                          )
-                      ) : (
-                        <Typography variant="caption" className="text-gray-400">
-                          Belum tercatat
-                        </Typography>
-                      )}
-                    </TableCell>
-                    )}
-                    <TableCell>
-                      <Typography variant="caption" className="text-gray-600">
-                        {new Date(item.created_at).toLocaleDateString('id-ID', {
+                      </Box>
+                    );
+                  }
+                  return (
+                    <Link
+                      href={`https://amoy.polygonscan.com/tx/${params.value}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#9333EA', textDecoration: 'none' }}
+                    >
+                      <BlockIcon fontSize="small" />
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                        {params.value.substring(0, 8)}...
+                      </Typography>
+                    </Link>
+                  );
+                },
+              }] : []),
+              {
+                field: 'created_at',
+                headerName: 'Tanggal',
+                width: 180,
+                type: 'dateTime',
+                filterable: true,
+                valueGetter: (value) => value ? new Date(value) : null,
+                renderCell: (params) => {
+                  if (!params.value) return '-';
+                  const date = new Date(params.value);
+                  return (
+                    <Box>
+                      <Typography variant="caption" sx={{ display: 'block' }}>
+                        {date.toLocaleDateString('id-ID', {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
                         })}
                       </Typography>
-                      <Typography variant="caption" className="text-gray-400 block text-xs">
-                        {new Date(item.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
+                        {date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2 justify-center">
-                        <Link href={`/reports/${item.id}`}>
-                          <IconButton size="small" title="Lihat Detail">
-                            <VisibilityIcon fontSize="small" className="text-blue-600" />
-                          </IconButton>
-                        </Link>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        {/* Pagination */}
-        {!loading && laporan.length > 0 && (
-          <Box className="mt-6 flex justify-center">
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={(_, value) => setPage(value)}
-              color="primary"
-              shape="rounded"
-            />
-          </Box>
-        )}
+                    </Box>
+                  );
+                },
+              },
+              {
+                field: 'actions',
+                type: 'actions',
+                headerName: 'Aksi',
+                width: 100,
+                getActions: (params) => [
+                  <GridActionsCellItem
+                    icon={<Tooltip title="Lihat Detail"><VisibilityIcon /></Tooltip>}
+                    label="Lihat Detail"
+                    onClick={() => router.push(`/reports/${params.row.id}`)}
+                    showInMenu={false}
+                    sx={{ color: '#3B82F6' }}
+                  />,
+                ],
+              },
+            ]}
+            loading={loading}
+            disableRowSelectionOnClick
+            pageSizeOptions={[10, 25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 10 },
+              },
+              sorting: {
+                sortModel: [{ field: 'created_at', sort: 'desc' }],
+              },
+            }}
+            slots={{
+              toolbar: GridToolbar,
+            }}
+            slotProps={{
+              toolbar: {
+                showQuickFilter: true,
+                quickFilterProps: { debounceMs: 500 },
+                printOptions: { disableToolbarButton: true },
+                csvOptions: { disableToolbarButton: true },
+                excelOptions: { disableToolbarButton: true },
+              },
+            }}
+            sx={{
+              '& .MuiDataGrid-toolbarContainer': {
+                p: 2,
+                borderBottom: '1px solid #E5E7EB',
+              },
+              '& .MuiDataGrid-row:hover': {
+                bgcolor: '#F9FAFB',
+              },
+            }}
+          />
+        </Paper>
     </Layout>
   );
 }

@@ -2,12 +2,43 @@
 
 import { useEffect, useRef, useState } from 'react';
 import api from '@/lib/api';
-import { MessageCircle, Sparkles, X, Send, Maximize2, Minimize2, Bot, Zap, CheckCircle2, XCircle, Image as ImageIcon, Paperclip, Edit2, Save, MapPin, Tag, AlertTriangle, FileImage } from 'lucide-react';
+import { MessageCircle, Sparkles, X, Send, Maximize2, Minimize2, Bot, Zap, CheckCircle2, XCircle, Image as ImageIcon, Paperclip, Edit2, Save, MapPin, Tag, AlertTriangle, FileImage, Clock3 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from './Toast';
 
-type Msg = { role: 'user' | 'assistant'; content: string; reportData?: any; awaitingConfirmation?: boolean; imageUrl?: string };
+type Msg = { role: 'user' | 'assistant'; content: string; reportData?: any; awaitingConfirmation?: boolean; imageUrl?: string; timestamp?: string };
+
+const createMessage = (msg: Omit<Msg, 'timestamp'> & { timestamp?: string }): Msg => ({
+  ...msg,
+  timestamp: msg.timestamp ?? new Date().toISOString(),
+});
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const formatDateHeader = (date: Date) =>
+  new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+
+const formatTimestampLabel = (date: Date) => {
+  const datePart = new Intl.DateTimeFormat('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+  const timePart = new Intl.DateTimeFormat('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+  return `${datePart} • ${timePart} WIB`;
+};
 
 const QUICK_SUGGESTIONS = [
   'Cara buat laporan',
@@ -19,7 +50,10 @@ const QUICK_SUGGESTIONS = [
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([
-    { role: 'assistant', content: 'Halo! 👋 Saya Asisten LaporIn yang siap membantu Anda. Ada yang bisa dibantu hari ini? 😊' },
+    createMessage({
+      role: 'assistant',
+      content: 'Halo! 👋 Saya Asisten LaporIn yang siap membantu Anda. Ada yang bisa dibantu hari ini? 😊',
+    }),
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -170,11 +204,11 @@ export default function ChatWidget() {
       });
     }
     
-    const userMsg: Msg = { 
+    const userMsg = createMessage({ 
       role: 'user' as const, 
       content: input || (imageFile ? '[Gambar terlampir]' : ''),
       imageUrl: imageBase64 || undefined
-    };
+    });
     const next: Msg[] = [...messages, userMsg];
     setMessages(next);
     setInput('');
@@ -188,12 +222,12 @@ export default function ChatWidget() {
           imageUrl: m.imageUrl
         }))
       });
-      const assistantMsg: Msg = { 
+      const assistantMsg = createMessage({ 
         role: 'assistant' as const, 
         content: data.reply,
         reportData: data.reportData,
         awaitingConfirmation: data.awaitingConfirmation || data.previewMode
-      };
+      });
       setMessages([...next, assistantMsg]);
       
       // SELALU set pendingDraft jika ada reportData (untuk CTA button)
@@ -271,7 +305,7 @@ export default function ChatWidget() {
       const errorMsg = 'Gagal membuat laporan. Silakan coba lagi.';
       setMessages([
         ...next,
-        { role: 'assistant' as const, content: 'Maaf, terjadi kendala. Silakan coba lagi nanti.' },
+        createMessage({ role: 'assistant' as const, content: 'Maaf, terjadi kendala. Silakan coba lagi nanti.' }),
       ]);
       showError(errorMsg);
     } finally {
@@ -294,12 +328,11 @@ export default function ChatWidget() {
       });
       
       // Tambahkan pesan konfirmasi ke chat
-      const confirmMessage = 'Laporan berhasil dikirim!';
-      const next: Msg[] = [...messages, { role: 'user' as const, content: 'kirim laporan' }];
-      setMessages([...next, { 
+      const next: Msg[] = [...messages, createMessage({ role: 'user' as const, content: 'kirim laporan' })];
+      setMessages([...next, createMessage({ 
         role: 'assistant' as const, 
         content: `✅ Laporan Anda telah berhasil dikirim!\n\n**Judul:** ${pendingDraft.title}\n**Lokasi:** ${pendingDraft.location}\n**Status:** ${data.status || 'pending'}\n\nLaporan Anda sedang diproses oleh admin.`
-      }]);
+      })]);
       
       setPendingDraft(null);
       setIsEditingDraft(false);
@@ -327,7 +360,7 @@ export default function ChatWidget() {
       const errorMsg = err?.response?.data?.error || 'Gagal membuat laporan. Silakan coba lagi.';
       setMessages([
         ...messages,
-        { role: 'assistant' as const, content: `❌ Maaf, terjadi kendala saat mengirim laporan: ${errorMsg}` },
+        createMessage({ role: 'assistant' as const, content: `❌ Maaf, terjadi kendala saat mengirim laporan: ${errorMsg}` }),
       ]);
       showError(errorMsg);
     } finally {
@@ -343,15 +376,15 @@ export default function ChatWidget() {
     setLoading(true);
     try {
       const cancelMessage = 'batal';
-      const next: Msg[] = [...messages, { role: 'user' as const, content: cancelMessage }];
+      const next: Msg[] = [...messages, createMessage({ role: 'user' as const, content: cancelMessage })];
       setMessages(next);
       
       const { data } = await api.post('/chat', { messages: next });
-      setMessages([...next, { role: 'assistant' as const, content: data.reply }]);
+      setMessages([...next, createMessage({ role: 'assistant' as const, content: data.reply })]);
     } catch {
       setMessages([
         ...messages,
-        { role: 'assistant' as const, content: 'Draft laporan dibatalkan.' },
+        createMessage({ role: 'assistant' as const, content: 'Draft laporan dibatalkan.' }),
       ]);
     } finally {
       setLoading(false);
@@ -453,74 +486,104 @@ export default function ChatWidget() {
 
           {/* Messages area dengan background yang lebih menarik */}
           <div className="flex-1 p-3 sm:p-5 space-y-3 sm:space-y-4 overflow-auto bg-gradient-to-b from-gray-50 via-white to-gray-50">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                <div className={`flex items-start gap-2 sm:gap-3 max-w-[90%] sm:max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {m.role === 'assistant' && (
-                    <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-full p-1.5 sm:p-2 shadow-lg ring-2 ring-blue-200/50 mt-0.5 flex-shrink-0">
-                      <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+            {messages.map((m, i) => {
+              const currentDate = m.timestamp ? new Date(m.timestamp) : undefined;
+              const previousDate =
+                i > 0 && messages[i - 1]?.timestamp ? new Date(messages[i - 1].timestamp as string) : undefined;
+              const showDateSeparator = currentDate && (!previousDate || !isSameDay(currentDate, previousDate));
+              const timestampLabel = currentDate ? formatTimestampLabel(currentDate) : null;
+              const isUser = m.role === 'user';
+
+              return (
+                <div key={`${i}-${m.timestamp ?? 'msg'}`} className="space-y-2 animate-fade-in">
+                  {showDateSeparator && currentDate && (
+                    <div className="flex items-center gap-3 text-[10px] sm:text-xs uppercase tracking-[0.2em] text-gray-500 px-2">
+                      <div className="flex-1 border-t border-gray-200" />
+                      <span className="px-3 py-1 rounded-full bg-white shadow text-gray-600 font-semibold">
+                        {formatDateHeader(currentDate)}
+                      </span>
+                      <div className="flex-1 border-t border-gray-200" />
                     </div>
                   )}
-                  <div
-                    className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md transition-all hover:shadow-lg break-words ${
-                      m.role === 'user'
-                        ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-tr-sm'
-                        : 'bg-white border-2 border-gray-100 text-gray-800 rounded-tl-sm shadow-sm hover:border-blue-200'
-                    }`}
-                  >
-                    {m.role === 'assistant' ? (
-                      <div className="markdown-content break-words">
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
-                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                            em: ({ children }) => <em className="italic">{children}</em>,
-                            ul: ({ children }) => <ul className="list-disc list-inside my-2 space-y-1 ml-1">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal list-inside my-2 space-y-1 ml-1">{children}</ol>,
-                            li: ({ children }) => <li className="ml-1">{children}</li>,
-                            code: ({ children, className }) => {
-                              const isInline = !className;
-                              return isInline ? (
-                                <code className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{children}</code>
-                              ) : (
-                                <code className="block bg-gray-100 text-gray-800 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
-                              );
-                            },
-                            h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h2>,
-                            h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-gray-900">{children}</h3>,
-                            blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-300 pl-3 my-2 italic text-gray-700">{children}</blockquote>,
-                            hr: () => <hr className="my-3 border-gray-200" />,
-                          }}
-                        >
-                          {m.content}
-                        </ReactMarkdown>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {m.imageUrl && (
-                          <div className="relative rounded-lg overflow-hidden border border-gray-300 max-w-xs">
-                            <img
-                              src={m.imageUrl}
-                              alt="Attached"
-                              className="w-full h-auto max-h-48 object-contain bg-gray-50"
-                            />
+                  <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`flex items-start gap-2 sm:gap-3 max-w-[90%] sm:max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                      {m.role === 'assistant' && (
+                        <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-full p-1.5 sm:p-2 shadow-lg ring-2 ring-blue-200/50 mt-0.5 flex-shrink-0">
+                          <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md transition-all hover:shadow-lg break-words ${
+                          isUser
+                            ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-tr-sm'
+                            : 'bg-white border-2 border-gray-100 text-gray-800 rounded-tl-sm shadow-sm hover:border-blue-200'
+                        }`}
+                      >
+                        {m.role === 'assistant' ? (
+                          <div className="markdown-content break-words">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                                strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                ul: ({ children }) => <ul className="list-disc list-inside my-2 space-y-1 ml-1">{children}</ul>,
+                                ol: ({ children }) => <ol className="list-decimal list-inside my-2 space-y-1 ml-1">{children}</ol>,
+                                li: ({ children }) => <li className="ml-1">{children}</li>,
+                                code: ({ children, className }) => {
+                                  const isInline = !className;
+                                  return isInline ? (
+                                    <code className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{children}</code>
+                                  ) : (
+                                    <code className="block bg-gray-100 text-gray-800 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
+                                  );
+                                },
+                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h1>,
+                                h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h2>,
+                                h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-gray-900">{children}</h3>,
+                                blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-300 pl-3 my-2 italic text-gray-700">{children}</blockquote>,
+                                hr: () => <hr className="my-3 border-gray-200" />,
+                              }}
+                            >
+                              {m.content}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {m.imageUrl && (
+                              <div className="relative rounded-lg overflow-hidden border border-gray-300 max-w-xs">
+                                <img
+                                  src={m.imageUrl}
+                                  alt="Attached"
+                                  className="w-full h-auto max-h-48 object-contain bg-gray-50"
+                                />
+                              </div>
+                            )}
+                            {m.content && m.content !== '[Gambar terlampir]' && (
+                              <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                            )}
                           </div>
                         )}
-                        {m.content && m.content !== '[Gambar terlampir]' && (
-                          <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                        {timestampLabel && (
+                          <div
+                            className={`mt-2 flex items-center gap-1 text-[10px] sm:text-xs font-medium ${
+                              isUser ? 'justify-end text-white/80' : 'justify-start text-gray-500'
+                            }`}
+                          >
+                            <Clock3 className="w-3 h-3" />
+                            <span>{timestampLabel}</span>
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                  {m.role === 'user' && (
-                    <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-full p-1.5 sm:p-2 shadow-md mt-0.5 flex-shrink-0 ring-2 ring-gray-100">
-                      <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
+                      {isUser && (
+                        <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-full p-1.5 sm:p-2 shadow-md mt-0.5 flex-shrink-0 ring-2 ring-gray-100">
+                          <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {loading && (
               <div className="flex items-center gap-3 text-sm text-gray-600 px-4 py-2 bg-white/50 rounded-xl border border-gray-200 shadow-sm">
                 <div className="flex gap-1.5">

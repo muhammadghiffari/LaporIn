@@ -21,16 +21,16 @@
 | `report:view:own` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `report:view:rt_rw` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `report:view:all` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `report:update:status` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `report:update:status` | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
 | `report:delete` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `report:cancel` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Keterangan:**
 - **Warga** hanya bisa membuat laporan, melihat laporan sendiri, dan membatalkan laporan sendiri
-- **Pengurus** bisa melihat dan update status laporan di RT/RW mereka
-- **Ketua RT / Sekretaris RT** bisa melihat dan update status laporan di RT mereka
-- **Admin RW** bisa melihat dan update status laporan di RW mereka
-- **Super Admin** bisa melihat dan mengelola semua laporan
+- **Pengurus** bisa melihat dan update status laporan di RT/RW mereka (hanya pengurus yang bisa approve laporan)
+- **Ketua RT / Sekretaris RT** bisa melihat laporan di RT mereka, tapi tidak bisa update status (hanya monitor)
+- **Admin RW** bisa melihat laporan di RW mereka, tapi tidak bisa update status (hanya monitor)
+- **Super Admin** bisa melihat dan mengelola semua laporan (termasuk update status)
 
 ---
 

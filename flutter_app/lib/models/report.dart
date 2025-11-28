@@ -17,6 +17,7 @@ class Report {
   final String? userName;
   final String? userEmail;
   final String? rtRw;
+  final bool isSensitive; // Laporan sensitif/rahasia
 
   Report({
     required this.id,
@@ -37,6 +38,7 @@ class Report {
     this.userName,
     this.userEmail,
     this.rtRw,
+    this.isSensitive = false,
   });
 
   factory Report.fromJson(Map<String, dynamic> json) {
@@ -63,6 +65,7 @@ class Report {
       userName: json['user_name'] ?? json['userName'],
       userEmail: json['user_email'] ?? json['userEmail'],
       rtRw: json['rt_rw'] ?? json['rtRw'],
+      isSensitive: json['is_sensitive'] ?? json['isSensitive'] ?? false,
     );
   }
 

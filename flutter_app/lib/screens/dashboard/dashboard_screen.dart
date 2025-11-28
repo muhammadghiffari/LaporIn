@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/report_provider.dart';
 import '../reports/create_report_screen.dart';
 import '../reports/reports_list_screen.dart';
 import '../settings/settings_screen.dart';
 import '../chat/chat_screen.dart';
+import '../auth/login_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -14,15 +14,57 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  late PageController _pageController;
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  void _onTabTapped(int index) {
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
 
-    if (user == null) {
+    // If not authenticated, redirect to login
+    if (!authState.isAuthenticated || user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        }
+      });
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -32,149 +74,128 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isAdmin = ['admin', 'admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt']
         .contains(user.role);
 
+    final tabs = [
+      _buildHomeTab(user, isWarga),
+      const ReportsListScreen(),
+      if (isAdmin) _buildAnalyticsTab(),
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LaporIn'),
+        title: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.blue[600]!, Colors.blue[800]!],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text(
+                  'L',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'LaporIn',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
         backgroundColor: Colors.blue[600],
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/login');
-              }
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      const SettingsScreen(),
+                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(1.0, 0.0),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeInOut,
+                      )),
+                      child: child,
+                    );
+                  },
+                ),
+              );
             },
           ),
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blue[600]),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white,
-                    child: Text(
-                      user.name[0].toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 24,
-                        color: Colors.blue[600],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    user.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    user.email,
-                    style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
-                  ),
-                  const SizedBox(height: 4),
-                  Chip(
-                    label: Text(
-                      user.role.toUpperCase(),
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    labelStyle: const TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('Dashboard'),
-              selected: _selectedIndex == 0,
-              onTap: () {
-                setState(() => _selectedIndex = 0);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.report),
-              title: const Text('Laporan'),
-              selected: _selectedIndex == 1,
-              onTap: () {
-                setState(() => _selectedIndex = 1);
-                Navigator.pop(context);
-              },
-            ),
-            if (isAdmin)
-              ListTile(
-                leading: const Icon(Icons.analytics),
-                title: const Text('Analytics'),
-                selected: _selectedIndex == 2,
-                onTap: () {
-                  setState(() => _selectedIndex = 2);
-                  Navigator.pop(context);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Pengaturan'),
-              onTap: () {
-                Navigator.pop(context);
+      body: Stack(
+        children: [
+          PageView(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            children: tabs,
+          ),
+          // Floating Chatbot Button (selalu di pojok kanan bawah)
+          Positioned(
+            bottom: _selectedIndex == 1 ? 100 : 80,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const ChatScreen(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      );
+                    },
                   ),
                 );
               },
+              backgroundColor: Colors.purple[600],
+              foregroundColor: Colors.white,
+              heroTag: "chatbot",
+              child: const Icon(Icons.smart_toy_outlined),
             ),
-          ],
-        ),
-      ),
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: [
-              _buildHomeTab(user, isWarga),
-              const ReportsListScreen(),
-              if (isAdmin) _buildAnalyticsTab(),
-            ],
           ),
-          // Floating Action Buttons untuk Warga
-          if (isWarga)
-            Positioned(
-              bottom: _selectedIndex == 1 ? 100 : 16,
-              right: 16,
-              child: FloatingActionButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ChatScreen(),
-                    ),
-                  );
-                },
-                backgroundColor: Colors.purple[600],
-                foregroundColor: Colors.white,
-                heroTag: "chatbot",
-                child: const Icon(Icons.chat),
-              ),
-            ),
         ],
       ),
       floatingActionButton: _selectedIndex == 1
           ? FloatingActionButton.extended(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CreateReportScreen(),
+                  PageRouteBuilder(
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const CreateReportScreen(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.0, 1.0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        )),
+                        child: child,
+                      );
+                    },
                   ),
                 );
               },
@@ -183,148 +204,157 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               backgroundColor: Colors.blue[600],
               foregroundColor: Colors.white,
             )
-          : null,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.report),
-            label: 'Laporan',
-          ),
-          if (isAdmin)
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.analytics),
-              label: 'Analytics',
+          : _selectedIndex == 0 && isWarga
+              ? FloatingActionButton.extended(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            const CreateReportScreen(),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.0, 1.0),
+                              end: Offset.zero,
+                            ).animate(CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            )),
+                            child: child,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  label: const Text('Buat Laporan', style: TextStyle(color: Colors.white)),
+                  backgroundColor: Colors.blue[600],
+                  foregroundColor: Colors.white,
+                )
+              : null,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
             ),
-        ],
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onTabTapped,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: Colors.blue[600],
+          unselectedItemColor: Colors.grey,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          elevation: 8,
+          items: [
+            BottomNavigationBarItem(
+              icon: _selectedIndex == 0
+                  ? const Icon(Icons.dashboard)
+                  : const Icon(Icons.dashboard_outlined),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: _selectedIndex == 1
+                  ? const Icon(Icons.report)
+                  : const Icon(Icons.report_outlined),
+              label: 'Laporan',
+            ),
+            if (isAdmin)
+              BottomNavigationBarItem(
+                icon: _selectedIndex == 2
+                    ? const Icon(Icons.analytics)
+                    : const Icon(Icons.analytics_outlined),
+                label: 'Analytics',
+              ),
+          ],
+        ),
       ),
     );
   }
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Selamat Pagi';
+    } else if (hour >= 12 && hour < 15) {
+      return 'Selamat Siang';
+    } else if (hour >= 15 && hour < 19) {
+      return 'Selamat Sore';
+    } else {
+      return 'Selamat Malam';
+    }
+  }
+
   Widget _buildHomeTab(user, bool isWarga) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Welcome card
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue[600]!, Colors.blue[800]!],
+    return Column(
+      children: [
+        // Greeting Header
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.blue[600]!, Colors.blue[800]!],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Selamat Datang, ${user.name}!',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isWarga
-                      ? 'Buat laporan untuk masalah di lingkungan Anda'
-                      : 'Kelola laporan warga di ${user.rtRw ?? "wilayah Anda"}',
-                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
-                ),
-              ],
-            ),
+            ],
           ),
-          const SizedBox(height: 24),
-          
-          // Quick actions
-          const Text(
-            'Aksi Cepat',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Row(
+          child: Row(
             children: [
               Expanded(
-                child: _buildActionCard(
-                  icon: Icons.add_circle,
-                  title: 'Buat Laporan',
-                  color: Colors.blue,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CreateReportScreen(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getGreeting(),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionCard(
-                  icon: Icons.list,
-                  title: 'Lihat Semua',
-                  color: Colors.green,
-                  onTap: () {
-                    setState(() => _selectedIndex = 1);
-                  },
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.waving_hand,
+                  color: Colors.white,
+                  size: 24,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          
-          // Recent reports
-          const Text(
-            'Laporan Terbaru',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          const ReportsListScreen(limit: 5),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionCard({
-    required IconData icon,
-    required String title,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
         ),
-        child: Column(
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        // Reports List with Filter
+        Expanded(
+          child: ReportsListScreen(limit: null),
         ),
-      ),
+      ],
     );
   }
 
@@ -334,4 +364,3 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 }
-

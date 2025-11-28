@@ -8,6 +8,11 @@ const {
   compareFaceDescriptors, 
   validateFaceDescriptor 
 } = require('../services/faceRecognitionService');
+const { 
+  extractFaceDescriptor, 
+  saveFaceImage,
+  loadModels 
+} = require('../services/faceExtractionService');
 
 const router = express.Router();
 
@@ -23,16 +28,19 @@ router.get('/stats/warga', authenticate, async (req, res) => {
     
     if ((roleUser === 'admin' || roleUser === 'admin_sistem') && rtFilter && rwFilter) {
       // Super Admin dengan filter RT dan RW
+      const rtNormalized = rtFilter.toUpperCase().startsWith('RT') ? rtFilter.toUpperCase() : `RT${rtFilter}`;
+      const rwNormalized = rwFilter.toUpperCase().startsWith('RW') ? rwFilter.toUpperCase() : `RW${rwFilter}`;
       wargaFilter = {
         role: 'warga',
-        rtRw: `${rtFilter}/${rwFilter}`
+        rtRw: `${rtNormalized}/${rwNormalized}` // Exact match
       };
     } else if ((roleUser === 'admin' || roleUser === 'admin_sistem') && rwFilter) {
-      // Super Admin dengan filter RW saja
+      // Super Admin dengan filter RW saja - gunakan exact match
+      const rwNormalized = rwFilter.toUpperCase().startsWith('RW') ? rwFilter.toUpperCase() : `RW${rwFilter}`;
       wargaFilter = {
         role: 'warga',
         rtRw: {
-          contains: `/${rwFilter}`,
+          endsWith: `/${rwNormalized}`, // Exact match di akhir string
           mode: 'insensitive'
         }
       };
@@ -44,9 +52,11 @@ router.get('/stats/warga', authenticate, async (req, res) => {
       });
       if (user?.rtRw) {
         const rwPart = user.rtRw.split('/')[1];
+        const rtNormalized = rtFilter.toUpperCase().startsWith('RT') ? rtFilter.toUpperCase() : `RT${rtFilter}`;
+        const rwNormalized = rwPart.toUpperCase().startsWith('RW') ? rwPart.toUpperCase() : `RW${rwPart}`;
         wargaFilter = {
           role: 'warga',
-          rtRw: `${rtFilter}/${rwPart}`
+          rtRw: `${rtNormalized}/${rwNormalized}` // Exact match
         };
       } else {
         wargaFilter = { role: 'warga' };
@@ -59,10 +69,11 @@ router.get('/stats/warga', authenticate, async (req, res) => {
       });
       if (user?.rtRw) {
         const rwPart = user.rtRw.split('/')[1];
+        const rwNormalized = rwPart.toUpperCase().startsWith('RW') ? rwPart.toUpperCase() : `RW${rwPart}`;
         wargaFilter = {
           role: 'warga',
           rtRw: {
-            contains: `/${rwPart}`,
+            endsWith: `/${rwNormalized}`, // Exact match di akhir string
             mode: 'insensitive'
           }
         };
@@ -103,17 +114,33 @@ router.get('/stats/warga', authenticate, async (req, res) => {
       }
     });
     
-    // Count by gender
-    const genderCounts = {};
+    // Count by gender dengan normalisasi
+    const genderCounts = {
+      laki_laki: 0,
+      perempuan: 0,
+      tidak_disediakan: 0
+    };
+    
     users.forEach(user => {
-      const gender = user.jenisKelamin || 'tidak_disediakan';
-      genderCounts[gender] = (genderCounts[gender] || 0) + 1;
+      if (!user.jenisKelamin) {
+        genderCounts.tidak_disediakan++;
+      } else {
+        // Normalisasi: case-insensitive dan handle berbagai format
+        const normalized = user.jenisKelamin.toLowerCase().trim();
+        if (normalized === 'laki_laki' || normalized === 'laki-laki' || normalized === 'laki laki' || normalized === 'pria') {
+          genderCounts.laki_laki++;
+        } else if (normalized === 'perempuan' || normalized === 'wanita') {
+          genderCounts.perempuan++;
+        } else {
+          genderCounts.tidak_disediakan++;
+        }
+      }
     });
     
-    const dataJenisKelamin = Object.entries(genderCounts).map(([jenis_kelamin, count]) => ({
-      jenis_kelamin,
-      count: Number(count)
-    }));
+    const dataJenisKelamin = [
+      { jenis_kelamin: 'laki_laki', count: genderCounts.laki_laki },
+      { jenis_kelamin: 'perempuan', count: genderCounts.perempuan }
+    ].filter(item => item.count > 0); // Hanya tampilkan yang ada datanya
     
     // Data pertumbuhan berdasarkan periode menggunakan Prisma
     const now = new Date();
@@ -163,8 +190,8 @@ router.get('/stats/warga', authenticate, async (req, res) => {
       count: Number(count)
     })).sort((a, b) => a.label.localeCompare(b.label));
     
-    const jumlahLaki = dataJenisKelamin.find(baris => baris.jenis_kelamin === 'laki_laki')?.count || 0;
-    const jumlahPerempuan = dataJenisKelamin.find(baris => baris.jenis_kelamin === 'perempuan')?.count || 0;
+    const jumlahLaki = genderCounts.laki_laki;
+    const jumlahPerempuan = genderCounts.perempuan;
     res.json({
       total_warga: totalWarga,
       by_gender: dataJenisKelamin,
@@ -376,13 +403,31 @@ router.post('/register-face', authenticate, async (req, res) => {
     // Encrypt face descriptor
     const encryptedFaceDescriptor = encryptFaceDescriptor(faceDescriptor);
     
-    // Update user dengan face descriptor
+    // Generate hash dari face descriptor untuk blockchain
+    const { ethers } = require('ethers');
+    const biometricHash = ethers.id(faceDescriptor).substring(0, 20);
+    
+    // Log ke blockchain (async, tidak block response)
+    let blockchainTxHash = null;
+    try {
+      const { logBiometricToBlockchain } = require('../services/blockchainService');
+      blockchainTxHash = await logBiometricToBlockchain(userId, biometricHash, 'register');
+      
+      if (blockchainTxHash) {
+        console.log(`[Face Register] ✅ Biometric registered to blockchain: ${blockchainTxHash}`);
+      }
+    } catch (blockchainError) {
+      console.error('[Face Register] Blockchain error (non-critical):', blockchainError.message);
+    }
+    
+    // Update user dengan face descriptor dan blockchain hash
     const userUpdated = await prisma.user.update({
       where: { id: userId },
       data: {
         faceDescriptor: encryptedFaceDescriptor,
         faceVerified: true,
-        faceVerifiedAt: new Date()
+        faceVerifiedAt: new Date(),
+        faceBlockchainTxHash: blockchainTxHash
       },
       select: {
         id: true,
@@ -396,10 +441,297 @@ router.post('/register-face', authenticate, async (req, res) => {
       success: true,
       message: 'Face descriptor registered successfully',
       face_verified: userUpdated.faceVerified,
-      face_verified_at: userUpdated.faceVerifiedAt
+      face_verified_at: userUpdated.faceVerifiedAt,
+      blockchain_tx_hash: blockchainTxHash,
+      blockchain_verified: !!blockchainTxHash
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Detect face dari foto (untuk real-time detection di mobile, tidak perlu auth)
+router.post('/face/detect', async (req, res) => {
+  try {
+    const { photo } = req.body; // Base64 image string
+    
+    if (!photo) {
+      return res.status(400).json({ error: 'Foto wajah diperlukan' });
+    }
+
+    // Validate base64 format
+    if (!photo.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Format foto tidak valid. Harus base64 image.' });
+    }
+
+    // Extract face descriptor dari foto (hanya untuk deteksi, tidak disimpan)
+    try {
+      const faceDescriptor = await extractFaceDescriptor(photo, true);
+      
+      // Return success dengan info deteksi
+      return res.json({
+        detected: true,
+        message: 'Wajah terdeteksi dengan baik',
+        descriptorLength: faceDescriptor.length
+      });
+    } catch (extractError) {
+      // User-friendly error messages
+      const errorMessage = extractError?.message || extractError?.toString() || 'Unknown error';
+      let userMessage = errorMessage;
+      
+      if (errorMessage && typeof errorMessage === 'string') {
+        if (errorMessage.includes('models not found') || errorMessage.includes('models')) {
+          userMessage = 'Sistem pengenalan wajah sedang dalam perbaikan.';
+        } else if (errorMessage.includes('No face detected') || errorMessage.includes('Tidak ada wajah')) {
+          userMessage = 'Tidak ada wajah terdeteksi. Pastikan wajah terlihat jelas dengan pencahayaan cukup.';
+        } else if (errorMessage.includes('Multiple faces') || errorMessage.includes('lebih dari satu')) {
+          userMessage = 'Terdeteksi lebih dari satu wajah. Pastikan hanya satu wajah yang terlihat.';
+        }
+      }
+      
+      return res.status(400).json({ 
+        detected: false,
+        error: userMessage || 'Gagal mendeteksi wajah dari foto.' 
+      });
+    }
+  } catch (error) {
+    console.error('[Face Detect] Error:', error);
+    return res.status(500).json({ 
+      detected: false,
+      error: 'Terjadi kesalahan saat mendeteksi wajah' 
+    });
+  }
+});
+
+// Register face dari foto (upload image, extract embedding otomatis)
+router.post('/face/register', authenticate, async (req, res) => {
+  try {
+    const { photo } = req.body; // Base64 image string
+    const userId = req.user.userId;
+    
+    if (!photo) {
+      return res.status(400).json({ error: 'Foto wajah diperlukan' });
+    }
+
+    // Validate base64 format
+    if (!photo.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Format foto tidak valid. Harus base64 image.' });
+    }
+
+    console.log(`[Face Register] User ${userId} uploading face photo...`);
+
+    // Extract face descriptor dari foto
+    let faceDescriptor;
+    try {
+      faceDescriptor = await extractFaceDescriptor(photo, true);
+    } catch (extractError) {
+      console.error('[Face Register] Extraction error:', extractError);
+      
+      // User-friendly error messages
+      const errorMessage = extractError?.message || extractError?.toString() || 'Unknown error';
+      let userMessage = errorMessage;
+      
+      if (errorMessage && typeof errorMessage === 'string') {
+        if (errorMessage.includes('models not found') || errorMessage.includes('models')) {
+          userMessage = 'Sistem pengenalan wajah sedang dalam perbaikan. Silakan coba lagi nanti atau hubungi administrator.';
+        } else if (errorMessage.includes('No face detected') || errorMessage.includes('Tidak ada wajah')) {
+          userMessage = 'Tidak ada wajah terdeteksi. Pastikan wajah Anda terlihat jelas di depan kamera dengan pencahayaan yang cukup.';
+        } else if (errorMessage.includes('Multiple faces') || errorMessage.includes('lebih dari satu')) {
+          userMessage = 'Terdeteksi lebih dari satu wajah. Pastikan hanya wajah Anda yang terlihat di kamera.';
+        }
+      }
+      
+      return res.status(400).json({ 
+        error: userMessage || 'Gagal mendeteksi wajah dari foto. Pastikan wajah terlihat jelas dan hanya satu wajah yang terlihat.' 
+      });
+    }
+
+    // Convert descriptor ke JSON string untuk encryption
+    const descriptorJson = JSON.stringify(faceDescriptor);
+    
+    // Validate descriptor
+    if (!validateFaceDescriptor(descriptorJson)) {
+      return res.status(400).json({ error: 'Face descriptor tidak valid setelah ekstraksi' });
+    }
+
+    // Encrypt face descriptor
+    const encryptedFaceDescriptor = encryptFaceDescriptor(descriptorJson);
+
+    // Generate hash dari face descriptor untuk blockchain (bukan data asli)
+    // Hash ini digunakan untuk audit trail di blockchain tanpa membocorkan data biometric
+    const { ethers } = require('ethers');
+    const biometricHash = ethers.id(descriptorJson).substring(0, 20); // Hash 20 karakter untuk efisiensi
+
+    // Optional: Save image to disk (untuk audit/backup)
+    try {
+      const base64Data = photo.replace(/^data:image\/\w+;base64,/, '');
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      await saveFaceImage(imageBuffer, userId);
+    } catch (saveError) {
+      console.warn('[Face Register] Failed to save image (non-critical):', saveError);
+      // Continue anyway, image saving is optional
+    }
+
+    // Log ke blockchain (async, tidak block response)
+    let blockchainTxHash = null;
+    try {
+      const { logBiometricToBlockchain } = require('../services/blockchainService');
+      blockchainTxHash = await logBiometricToBlockchain(userId, biometricHash, 'register');
+      
+      if (blockchainTxHash) {
+        console.log(`[Face Register] ✅ Biometric registered to blockchain: ${blockchainTxHash}`);
+      } else {
+        console.warn('[Face Register] ⚠️ Blockchain logging failed (non-critical)');
+      }
+    } catch (blockchainError) {
+      console.error('[Face Register] Blockchain error (non-critical):', blockchainError.message);
+      // Continue - blockchain error tidak boleh block registration
+    }
+
+    // Update user dengan face descriptor dan blockchain hash
+    const userUpdated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        faceDescriptor: encryptedFaceDescriptor,
+        faceVerified: true,
+        faceVerifiedAt: new Date(),
+        faceBlockchainTxHash: blockchainTxHash // Simpan blockchain transaction hash
+      },
+      select: {
+        id: true,
+        email: true,
+        faceVerified: true,
+        faceVerifiedAt: true
+      }
+    });
+
+    console.log(`[Face Register] User ${userId} face registered successfully`);
+
+    res.json({
+      success: true,
+      message: 'Wajah berhasil didaftarkan',
+      face_verified: userUpdated.faceVerified,
+      face_verified_at: userUpdated.faceVerifiedAt,
+      blockchain_tx_hash: blockchainTxHash, // Return blockchain hash untuk verifikasi
+      blockchain_verified: !!blockchainTxHash
+    });
+  } catch (error) {
+    console.error('[Face Register] Error:', error);
+    res.status(400).json({ error: error.message || 'Gagal mendaftarkan wajah' });
+  }
+});
+
+// Verify face dari foto (upload image, extract embedding, compare)
+router.post('/face/verify', authenticate, async (req, res) => {
+  try {
+    const { photo } = req.body; // Base64 image string
+    const userId = req.user.userId;
+    
+    if (!photo) {
+      return res.status(400).json({ error: 'Foto wajah diperlukan' });
+    }
+
+    // Validate base64 format
+    if (!photo.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Format foto tidak valid. Harus base64 image.' });
+    }
+
+    // Get user face descriptor
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        faceDescriptor: true,
+        faceVerified: true
+      }
+    });
+
+    if (!user || !user.faceDescriptor) {
+      return res.status(400).json({ 
+        error: 'Wajah belum terdaftar. Silakan daftarkan wajah terlebih dahulu di Pengaturan.' 
+      });
+    }
+
+    console.log(`[Face Verify] User ${userId} verifying face...`);
+
+    // Extract face descriptor dari foto
+    let newDescriptor;
+    try {
+      newDescriptor = await extractFaceDescriptor(photo, true);
+    } catch (extractError) {
+      console.error('[Face Verify] Extraction error:', extractError);
+      
+      // User-friendly error messages
+      const errorMessage = extractError?.message || extractError?.toString() || 'Unknown error';
+      let userMessage = errorMessage;
+      
+      if (errorMessage && typeof errorMessage === 'string') {
+        if (errorMessage.includes('models not found') || errorMessage.includes('models')) {
+          userMessage = 'Sistem pengenalan wajah sedang dalam perbaikan. Silakan coba lagi nanti atau hubungi administrator.';
+        } else if (errorMessage.includes('No face detected') || errorMessage.includes('Tidak ada wajah')) {
+          userMessage = 'Tidak ada wajah terdeteksi. Pastikan wajah Anda terlihat jelas di depan kamera dengan pencahayaan yang cukup.';
+        } else if (errorMessage.includes('Multiple faces') || errorMessage.includes('lebih dari satu')) {
+          userMessage = 'Terdeteksi lebih dari satu wajah. Pastikan hanya wajah Anda yang terlihat di kamera.';
+        }
+      }
+      
+      return res.status(400).json({ 
+        error: userMessage || 'Gagal mendeteksi wajah dari foto. Pastikan wajah terlihat jelas dan hanya satu wajah yang terlihat.' 
+      });
+    }
+
+    // Convert descriptor ke JSON string untuk comparison
+    const newDescriptorJson = JSON.stringify(newDescriptor);
+
+    // Compare dengan stored descriptor
+    const comparison = compareFaceDescriptors(user.faceDescriptor, newDescriptorJson);
+
+    // Track verification attempt ke database
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'] || null;
+
+    try {
+      await prisma.faceVerificationLog.create({
+        data: {
+          userId: userId,
+          verified: comparison.isMatch,
+          distance: comparison.distance,
+          threshold: comparison.threshold,
+          confidence: comparison.confidence || null,
+          context: 'face_verify',
+          ipAddress: ipAddress,
+          userAgent: userAgent
+        }
+      });
+
+      console.log(`[Face Verify] User ${userId} - Verified: ${comparison.isMatch}, Distance: ${comparison.distance}, Confidence: ${comparison.confidence}%`);
+    } catch (logError) {
+      console.error('[Face Verify] Failed to log verification:', logError);
+      // Don't fail request because of logging error
+    }
+
+    if (!comparison.isMatch) {
+      return res.status(401).json({ 
+        verified: false,
+        error: 'Verifikasi wajah gagal. Wajah tidak cocok dengan yang terdaftar. Pastikan Anda menggunakan akun yang benar dan wajah terlihat jelas.',
+        details: {
+          distance: comparison.distance,
+          threshold: comparison.threshold,
+          confidence: comparison.confidence
+        }
+      });
+    }
+
+    res.json({
+      verified: true,
+      message: 'Verifikasi wajah berhasil',
+      distance: comparison.distance,
+      threshold: comparison.threshold,
+      confidence: comparison.confidence
+    });
+  } catch (error) {
+    console.error('[Face Verify] Error:', error);
+    res.status(400).json({ error: error.message || 'Gagal memverifikasi wajah' });
   }
 });
 
@@ -695,22 +1027,86 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// Daftar semua users (hanya admin sistem)
-router.get('/users', async (req, res) => {
+// Daftar users berdasarkan role (admin: semua, admin_rw: RT dan warga di RW, ketua_rt/sekretaris: warga di RT)
+router.get('/users', authenticate, async (req, res) => {
   try {
-    const headerAuth = req.headers.authorization;
-    if (!headerAuth) return res.status(401).json({ error: 'Unauthorized' });
-    const token = headerAuth.split(' ')[1];
-    const tokenTerdekripsi = jwt.verify(token, process.env.JWT_SECRET);
-    if (tokenTerdekripsi.role !== 'admin') {
+    const idUser = req.user.userId;
+    const roleUser = req.user.role;
+    const { role, search, limit = 50, offset = 0, rtFilter } = req.query;
+    
+    // Hanya role tertentu yang bisa akses
+    const allowedRoles = ['admin', 'admin_sistem', 'admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'];
+    if (!allowedRoles.includes(roleUser)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
-    const { role, search, limit = 50, offset = 0 } = req.query;
     
+    // Get user RT/RW untuk filter
+    const currentUser = await prisma.user.findUnique({
+      where: { id: idUser },
+      select: { rtRw: true }
+    });
+    
+    // Build filter berdasarkan role
     const kondisiWhere = {};
-    if (role) {
-      kondisiWhere.role = role;
+    
+    if (roleUser === 'admin' || roleUser === 'admin_sistem') {
+      // Super Admin: lihat semua user (semua role)
+      // Tidak ada filter RT/RW - kondisiWhere tetap kosong untuk melihat semua
+      console.log('[Users API] Super Admin: Fetching all users (no RT/RW filter)');
+    } else if (roleUser === 'admin_rw') {
+      // Admin RW: lihat RT dan warga di RW mereka
+      if (currentUser?.rtRw) {
+        const rwPart = currentUser.rtRw.split('/')[1];
+        const rwNormalized = rwPart.toUpperCase().startsWith('RW') ? rwPart.toUpperCase() : `RW${rwPart}`;
+        
+        // Jika ada rtFilter, filter per RT tertentu
+        if (rtFilter) {
+          const rtNormalized = rtFilter.toUpperCase().startsWith('RT') ? rtFilter.toUpperCase() : `RT${rtFilter}`;
+          kondisiWhere.rtRw = {
+            equals: `${rtNormalized}/${rwNormalized}`,
+            mode: 'insensitive'
+          };
+        } else {
+          kondisiWhere.rtRw = {
+            endsWith: `/${rwNormalized}`, // Exact match di akhir string
+            mode: 'insensitive'
+          };
+        }
+        
+        // Hanya role yang relevan: RT (ketua_rt, sekretaris_rt, sekretaris, pengurus) dan warga
+        kondisiWhere.role = {
+          in: ['warga', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus']
+        };
+      } else {
+        return res.json({ data: [], total: 0, page: 1, limit: Number(limit) });
+      }
+    } else if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(roleUser)) {
+      // Ketua RT/Sekretaris: lihat warga di RT mereka saja
+      if (currentUser?.rtRw) {
+        kondisiWhere.rtRw = currentUser.rtRw; // Exact match RT/RW
+        kondisiWhere.role = 'warga'; // Hanya warga
+      } else {
+        return res.json({ data: [], total: 0, page: 1, limit: Number(limit) });
+      }
     }
+    
+    // Filter role (jika ada)
+    if (role && role !== 'all') {
+      if (kondisiWhere.role) {
+        // Jika sudah ada filter role, gabungkan dengan AND
+        if (Array.isArray(kondisiWhere.role.in)) {
+          kondisiWhere.role = {
+            in: kondisiWhere.role.in.filter(r => r === role)
+          };
+        } else {
+          kondisiWhere.role = role;
+        }
+      } else {
+        kondisiWhere.role = role;
+      }
+    }
+    
+    // Filter search
     if (search) {
       kondisiWhere.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -718,9 +1114,19 @@ router.get('/users', async (req, res) => {
       ];
     }
     
+    // Untuk superadmin, jika kondisiWhere kosong, gunakan {} untuk melihat semua
+    // Cek apakah kondisiWhere benar-benar kosong (tidak ada property)
+    const isWhereEmpty = Object.keys(kondisiWhere).length === 0;
+    const finalWhere = isWhereEmpty ? {} : kondisiWhere;
+    
+    console.log('[Users API] Role:', roleUser);
+    console.log('[Users API] Is where empty?', isWhereEmpty);
+    console.log('[Users API] Final where clause:', JSON.stringify(finalWhere, null, 2));
+    console.log('[Users API] Query params - limit:', limit, 'offset:', offset);
+    
     const [daftarUser, totalUser] = await Promise.all([
       prisma.user.findMany({
-        where: kondisiWhere,
+        where: finalWhere,
         select: {
           id: true,
           email: true,
@@ -734,8 +1140,19 @@ router.get('/users', async (req, res) => {
         take: parseInt(limit),
         skip: parseInt(offset)
       }),
-      prisma.user.count({ where: kondisiWhere })
+      prisma.user.count({ where: finalWhere })
     ]);
+    
+    console.log(`[Users API] Found ${daftarUser.length} users (total: ${totalUser})`);
+    if (roleUser === 'admin' || roleUser === 'admin_sistem') {
+      const roleCounts = {};
+      daftarUser.forEach(u => {
+        roleCounts[u.role] = (roleCounts[u.role] || 0) + 1;
+      });
+      console.log('[Users API] Super Admin - Role distribution in this page:', roleCounts);
+      console.log('[Users API] Super Admin - Sample users:', daftarUser.slice(0, 5).map(u => `${u.name} (${u.role})`));
+      console.log('[Users API] Super Admin - Total users in DB:', totalUser);
+    }
     
     res.json({
       data: daftarUser.map(user => ({
@@ -926,6 +1343,178 @@ router.post('/warga/:userId/verify', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error verifying warga:', error);
     res.status(500).json({ error: 'Gagal melakukan verifikasi warga' });
+  }
+});
+
+// Update user profile (untuk user yang sudah login)
+router.patch('/profile', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, jenis_kelamin } = req.body;
+    
+    // Validasi input
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Nama wajib diisi' });
+    }
+    
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: name.trim(),
+        jenisKelamin: jenis_kelamin || null,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        rtRw: true,
+        jenisKelamin: true,
+        isVerified: true,
+      }
+    });
+    
+    console.log(`[Profile Update] User ${userId} updated profile`);
+    
+    res.json({
+      success: true,
+      message: 'Profil berhasil diperbarui',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        rt_rw: updatedUser.rtRw,
+        jenis_kelamin: updatedUser.jenisKelamin,
+        is_verified: updatedUser.isVerified,
+      }
+    });
+  } catch (error) {
+    console.error('[Profile Update] Error:', error);
+    res.status(400).json({ error: error.message || 'Gagal memperbarui profil' });
+  }
+});
+
+// Change password (untuk user yang sudah login)
+router.patch('/password', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+    
+    // Validasi input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Password lama dan password baru wajib diisi' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password baru minimal 6 karakter' });
+    }
+    
+    // Get user dengan password hash
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User tidak ditemukan' });
+    }
+    
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Password lama tidak benar' });
+    }
+    
+    // Hash new password
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update password
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash: newPasswordHash,
+      }
+    });
+    
+    console.log(`[Password Change] User ${userId} changed password`);
+    
+    res.json({
+      success: true,
+      message: 'Password berhasil diubah'
+    });
+  } catch (error) {
+    console.error('[Password Change] Error:', error);
+    res.status(400).json({ error: error.message || 'Gagal mengubah password' });
+  }
+});
+
+// Send email verification code (OTP)
+router.post('/send-verification-code', async (req, res) => {
+  try {
+    const { email, type = 'registration' } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email wajib diisi' });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Format email tidak valid' });
+    }
+    
+    const { sendVerificationCode } = require('../services/emailVerificationService');
+    const result = await sendVerificationCode(email, type, null);
+    
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Gagal mengirim kode verifikasi' });
+    }
+    
+    res.json({
+      success: true,
+      message: result.message || 'Kode verifikasi telah dikirim ke email Anda',
+      codeId: result.codeId
+    });
+  } catch (error) {
+    console.error('[Send Verification Code] Error:', error);
+    res.status(500).json({ error: 'Gagal mengirim kode verifikasi' });
+  }
+});
+
+// Verify email verification code (OTP)
+router.post('/verify-code', async (req, res) => {
+  try {
+    const { email, code, type = 'registration' } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email dan kode verifikasi wajib diisi' });
+    }
+    
+    if (!code.match(/^\d{6}$/)) {
+      return res.status(400).json({ error: 'Kode verifikasi harus 6 digit angka' });
+    }
+    
+    const { verifyCode } = require('../services/emailVerificationService');
+    const result = await verifyCode(email, code, type);
+    
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Kode verifikasi tidak valid' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Email berhasil diverifikasi',
+      codeId: result.codeId,
+      userId: result.userId
+    });
+  } catch (error) {
+    console.error('[Verify Code] Error:', error);
+    res.status(500).json({ error: 'Gagal memverifikasi kode' });
   }
 });
 

@@ -6,9 +6,16 @@ const turf = require('@turf/turf');
  * @param {number} reportLat - Report latitude
  * @param {number} reportLng - Report longitude
  * @param {Object} userRtRw - User object with RT/RW boundary data
- * @returns {Object} { isValid: boolean, distance: number (meters), mismatch: boolean }
+ * @param {Object} options - Validation options
+ * @param {number} options.toleranceMeters - Tolerance distance in meters (default: 50m)
+ * @param {boolean} options.strictMode - If true, block reports outside boundary (default: false)
+ * @returns {Object} { isValid: boolean, distance: number (meters), mismatch: boolean, shouldBlock: boolean }
  */
-function validateLocationForRT(reportLat, reportLng, userRtRw) {
+function validateLocationForRT(reportLat, reportLng, userRtRw, options = {}) {
+  const {
+    toleranceMeters = parseInt(process.env.LOCATION_TOLERANCE_METERS || '50'), // Default 50m tolerance
+    strictMode = process.env.LOCATION_STRICT_MODE === 'true' // Default: warning only
+  } = options;
   if (!reportLat || !reportLng) {
     return {
       isValid: false,
@@ -57,19 +64,34 @@ function validateLocationForRT(reportLat, reportLng, userRtRw) {
 
       const polygon = turf.polygon([polygonCoords]);
       isValid = turf.booleanPointInPolygon(reportPoint, polygon);
+      
+      // Apply tolerance: jika di luar polygon tapi masih dalam tolerance, anggap valid
+      if (!isValid && toleranceMeters > 0) {
+        // Check distance to polygon edge (simplified: use center distance as approximation)
+        // Jika jarak ke center masih dalam radius + tolerance, anggap valid
+        const effectiveRadius = userRtRw.rtRwRadius || 500; // Fallback radius untuk tolerance
+        isValid = distance <= (effectiveRadius + toleranceMeters);
+      }
+      
       mismatch = !isValid;
+      const shouldBlock = strictMode && mismatch;
 
       console.log('📍 Polygon validation:', {
         isValid,
         distance: distance.toFixed(2) + 'm',
-        polygonPoints: polygonCoords.length
+        polygonPoints: polygonCoords.length,
+        tolerance: toleranceMeters + 'm',
+        strictMode,
+        shouldBlock
       });
 
       return {
         isValid,
         distance: Math.round(distance),
         mismatch,
-        method: 'polygon'
+        shouldBlock,
+        method: 'polygon',
+        toleranceApplied: !isValid && toleranceMeters > 0 && distance <= (effectiveRadius + toleranceMeters)
       };
     } catch (error) {
       console.error('❌ Polygon validation error:', error.message);
@@ -79,21 +101,31 @@ function validateLocationForRT(reportLat, reportLng, userRtRw) {
 
   // Priority 2: Check radius boundary (fallback atau jika polygon tidak ada)
   if (userRtRw.rtRwRadius && userRtRw.rtRwRadius > 0) {
-    isValid = distance <= userRtRw.rtRwRadius;
-    mismatch = !isValid;
+    // Apply tolerance: radius + tolerance
+    const effectiveRadius = userRtRw.rtRwRadius + toleranceMeters;
+    isValid = distance <= effectiveRadius;
+    mismatch = distance > userRtRw.rtRwRadius; // Mismatch jika di luar radius asli (tanpa tolerance)
+    const shouldBlock = strictMode && (distance > userRtRw.rtRwRadius); // Block jika di luar radius asli
 
     console.log('📍 Radius validation:', {
       isValid,
       distance: distance.toFixed(2) + 'm',
       radius: userRtRw.rtRwRadius + 'm',
-      withinRadius: distance <= userRtRw.rtRwRadius
+      effectiveRadius: effectiveRadius + 'm',
+      tolerance: toleranceMeters + 'm',
+      withinRadius: distance <= userRtRw.rtRwRadius,
+      withinTolerance: distance <= effectiveRadius,
+      strictMode,
+      shouldBlock
     });
 
     return {
       isValid,
       distance: Math.round(distance),
       mismatch,
-      method: 'radius'
+      shouldBlock,
+      method: 'radius',
+      toleranceApplied: distance > userRtRw.rtRwRadius && distance <= effectiveRadius
     };
   }
 
@@ -102,6 +134,7 @@ function validateLocationForRT(reportLat, reportLng, userRtRw) {
     isValid: true,
     distance: Math.round(distance),
     mismatch: false,
+    shouldBlock: false,
     warning: 'RT/RW boundary tidak lengkap, validation di-skip'
   };
 }

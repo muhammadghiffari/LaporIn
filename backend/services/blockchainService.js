@@ -44,9 +44,11 @@ function decryptSensitiveData(encryptedData) {
 const CONTRACT_ABI = [
   "function logReportEvent(uint256 reportId, string memory status, string memory metaHash) public",
   "function logBantuanEvent(uint256 bantuanId, string memory jenisBantuan, uint256 nominal, address recipient) public",
+  "function logBiometricEvent(uint256 userId, string memory biometricHash, string memory action) public",
   "function getReportEvents(uint256 reportId) public view returns (tuple(uint256 reportId, string status, address actor, uint256 timestamp, string metaHash)[])",
   "event ReportEventCreated(uint256 indexed reportId, string status, address actor, uint256 timestamp, string metaHash)",
-  "event BantuanEventCreated(uint256 indexed bantuanId, string jenisBantuan, uint256 nominal, address recipient, uint256 timestamp)"
+  "event BantuanEventCreated(uint256 indexed bantuanId, string jenisBantuan, uint256 nominal, address recipient, uint256 timestamp)",
+  "event BiometricEventCreated(uint256 indexed userId, string biometricHash, string action, address actor, uint256 timestamp)"
 ];
 
 let cached = {
@@ -284,6 +286,104 @@ async function logBantuanToBlockchain(bantuanId, jenisBantuan, nominal, recipien
 }
 
 /**
+ * Log biometric registration ke blockchain
+ * Hanya menyimpan HASH dari biometric (bukan data asli) untuk keamanan
+ * @param {number} userId - ID user
+ * @param {string} biometricHash - Hash dari face descriptor (untuk audit trail)
+ * @param {string} action - 'register' atau 'update'
+ */
+async function logBiometricToBlockchain(userId, biometricHash, action = 'register', retryCount = 0) {
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY = 2000; // 2 detik
+  
+  try {
+    console.log('[Blockchain] logBiometricToBlockchain called:', {
+      userId,
+      action,
+      hasHash: !!biometricHash,
+      canUseBlockchain: canUseBlockchain(),
+      retryCount
+    });
+    
+    const contractInstance = await initContract();
+    if (!contractInstance) {
+      console.warn('[Blockchain] Cannot log biometric - contract not initialized');
+      return null;
+    }
+    
+    // Pastikan biometricHash adalah hash yang valid (bukan data asli)
+    // Hash harus berupa string yang aman untuk disimpan di blockchain
+    const safeHash = biometricHash || ethers.id(`${userId}-${Date.now()}`).substring(0, 20);
+    
+    console.log('[Blockchain] Calling logBiometricEvent on contract...');
+    const tx = await contractInstance.logBiometricEvent(userId, safeHash, action);
+    console.log('[Blockchain] Biometric transaction sent, waiting for confirmation...', tx.hash);
+    
+    // Wait untuk konfirmasi dengan timeout 60 detik
+    try {
+      const receipt = await Promise.race([
+        tx.wait(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Transaction timeout after 60 seconds')), 60000)
+        )
+      ]);
+      
+      // Validasi receipt
+      if (!receipt || !receipt.status) {
+        console.error('[Blockchain] Biometric transaction receipt invalid or failed:', receipt);
+        throw new Error('Transaction failed - receipt status is 0');
+      }
+      
+      console.log('[Blockchain] Biometric transaction confirmed:', {
+        txHash: tx.hash,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed?.toString(),
+        status: receipt.status
+      });
+      
+      // Validasi transaction hash format
+      if (!tx.hash || tx.hash.length !== 66 || !tx.hash.startsWith('0x')) {
+        console.error('[Blockchain] Invalid biometric transaction hash format:', tx.hash);
+        throw new Error('Invalid transaction hash format');
+      }
+      
+      return tx.hash;
+    } catch (waitError) {
+      console.error('[Blockchain] Error waiting for biometric transaction confirmation:', waitError);
+      
+      // Retry mechanism
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[Blockchain] Retrying biometric transaction (${retryCount + 1}/${MAX_RETRIES})...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return logBiometricToBlockchain(userId, biometricHash, action, retryCount + 1);
+      }
+      
+      throw waitError;
+    }
+  } catch (error) {
+    console.error('[Blockchain] Error in logBiometricToBlockchain:', {
+      error: error?.shortMessage || error?.message || error,
+      userId,
+      action,
+      retryCount
+    });
+    
+    // Retry mechanism untuk error lainnya
+    if (retryCount < MAX_RETRIES && (
+      error?.message?.includes('timeout') ||
+      error?.message?.includes('network') ||
+      error?.code === 'NETWORK_ERROR'
+    )) {
+      console.log(`[Blockchain] Retrying biometric transaction due to network error (${retryCount + 1}/${MAX_RETRIES})...`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return logBiometricToBlockchain(userId, biometricHash, action, retryCount + 1);
+    }
+    
+    return null;
+  }
+}
+
+/**
  * Ambil log blockchain events untuk laporan tertentu
  * @param {number} reportId - ID laporan
  */
@@ -446,6 +546,7 @@ async function getAllBlockchainLogs(limit = 100) {
 module.exports = {
   logReportToBlockchain,
   logBantuanToBlockchain,
+  logBiometricToBlockchain,
   encryptSensitiveData,
   decryptSensitiveData,
   getReportBlockchainLogs,

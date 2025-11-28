@@ -153,6 +153,49 @@ async function logBantuanToBlockchain(bantuanId, jenisBantuan, nominal, recipien
 }
 
 /**
+ * Mock: Log biometric registration ke "blockchain"
+ */
+async function logBiometricToBlockchain(userId, biometricHash, action = 'register') {
+  try {
+    console.log('[Mock Blockchain] 🔐 Logging biometric to mock blockchain:', {
+      userId,
+      action,
+      hasHash: !!biometricHash
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const txHash = generateMockTxHash();
+    mockBlockchainStorage.blockNumber++;
+
+    // Simpan ke mock storage
+    const event = {
+      userId: Number(userId),
+      biometricHash: biometricHash || 'hash-' + userId,
+      action,
+      timestamp: Math.floor(Date.now() / 1000),
+      txHash,
+      blockNumber: mockBlockchainStorage.blockNumber,
+      date: new Date().toISOString()
+    };
+
+    if (!mockBlockchainStorage.biometrics) {
+      mockBlockchainStorage.biometrics = new Map();
+    }
+    if (!mockBlockchainStorage.biometrics.has(userId)) {
+      mockBlockchainStorage.biometrics.set(userId, []);
+    }
+    mockBlockchainStorage.biometrics.get(userId).push(event);
+    mockBlockchainStorage.transactions.set(txHash, event);
+
+    console.log('[Mock Blockchain] ✅ Biometric transaction "confirmed":', txHash);
+    return txHash;
+  } catch (error) {
+    console.error('[Mock Blockchain] Error:', error);
+    return null;
+  }
+}
+
+/**
  * Mock: Ambil log blockchain events untuk laporan
  */
 async function getReportBlockchainLogs(reportId) {
@@ -223,6 +266,7 @@ function canUseBlockchain() {
 module.exports = {
   logReportToBlockchain,
   logBantuanToBlockchain,
+  logBiometricToBlockchain,
   encryptSensitiveData,
   decryptSensitiveData,
   getReportBlockchainLogs,

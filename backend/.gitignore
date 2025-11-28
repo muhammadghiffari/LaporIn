@@ -3,3 +3,9 @@ node_modules
 .env
 
 /generated/prisma
+
+# Face recognition uploads (sensitive data)
+uploads/faces/*
+!uploads/faces/.gitkeep
+uploads/*
+!uploads/.gitkeep

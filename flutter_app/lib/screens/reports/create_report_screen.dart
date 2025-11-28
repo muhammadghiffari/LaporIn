@@ -29,6 +29,7 @@ class _CreateReportScreenState extends ConsumerState<CreateReportScreen> {
   double? _longitude;
   bool _isGettingLocation = false;
   String? _locationError;
+  bool _isSensitive = false; // Laporan sensitif/rahasia
 
   @override
   void initState() {
@@ -126,6 +127,7 @@ class _CreateReportScreenState extends ConsumerState<CreateReportScreen> {
         'imageUrl': _imageBase64,
         'latitude': _latitude,
         'longitude': _longitude,
+        'isSensitive': _isSensitive, // Laporan sensitif/rahasia
         // Kategori dan urgensi akan di-set oleh AI di backend
       });
 
@@ -345,7 +347,59 @@ class _CreateReportScreenState extends ConsumerState<CreateReportScreen> {
                   icon: const Icon(Icons.camera_alt),
                   label: const Text('Ambil Foto'),
                 ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              // Checkbox Laporan Sensitif
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _isSensitive,
+                      onChanged: (value) {
+                        setState(() {
+                          _isSensitive = value ?? false;
+                        });
+                      },
+                      activeColor: Colors.orange[700],
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.lock_outline, color: Colors.orange[700], size: 18),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Laporan Sensitif/Rahasia',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange[900],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Centang jika laporan ini bersifat sensitif. Hanya admin RT/RW yang dapat melihat laporan ini.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _isLoading ? null : _submitReport,
                 style: ElevatedButton.styleFrom(

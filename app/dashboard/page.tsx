@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import useAuthStore from '@/store/authStore';
 import ReportsList from '@/components/ReportsList';
 import CreateReportForm from '@/components/CreateReportForm';
 import api from '@/lib/api';
-import ChatWidget from '@/components/ChatWidget';
 import Layout from '@/components/Layout';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/Toast';
@@ -26,6 +26,18 @@ import RTQueuePanel from '@/components/RTQueuePanel';
 import RealtimeFeed from '@/components/RealtimeFeed';
 import UserVerificationPanel from '@/components/UserVerificationPanel';
 import { BarChart3, Building2, Users, Info } from 'lucide-react';
+
+// Lazy load ChatWidget untuk reduce initial bundle size
+const ChatWidget = dynamic(() => import('@/components/ChatWidget'), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed bottom-6 right-6 w-16 h-16 bg-blue-600 rounded-full shadow-lg flex items-center justify-center animate-pulse">
+      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+      </svg>
+    </div>
+  ),
+});
 
 ChartJS.register(
   CategoryScale,
@@ -51,17 +63,20 @@ export default function DashboardPage() {
   const [rwFilter, setRwFilter] = useState<string>(''); // Filter RW untuk Super Admin
   const [rtList, setRtList] = useState<Array<{rt: string, rtRw: string, label: string}>>([]); // Daftar RT dalam RW
   const [rwList, setRwList] = useState<Array<{rw: string, label: string}>>([]); // Daftar RW untuk Super Admin
+  const [rtStats, setRtStats] = useState<any>(null); // Statistik per RT untuk RW Admin
+  const [rwSummary, setRwSummary] = useState<any>(null); // Ringkasan RW untuk Super Admin
+  const [rwListSummary, setRwListSummary] = useState<any>(null); // Ringkasan semua RW untuk Super Admin
   const [mounted, setMounted] = useState(false);
   const { toasts, error: showError, removeToast } = useToast();
   
-  // Peran yang boleh melihat grafik/statistik
-  const allowedRoles = ['pengurus', 'admin', 'sekretaris_rt', 'sekretaris', 'ketua_rt', 'admin_rw'];
-  const isPengurus = allowedRoles.includes(user?.role || '');
-  const isWarga = user?.role === 'warga';
-  const isSuperAdmin = user?.role === 'admin' || user?.role === 'admin_sistem';
-  const isAdminRW = user?.role === 'admin_rw';
-  const isSekretaris = user?.role === 'sekretaris_rt' || user?.role === 'sekretaris';
-  const isKetuaRT = user?.role === 'ketua_rt';
+  // Peran yang boleh melihat grafik/statistik - Memoize untuk prevent recalculation
+  const allowedRoles = useMemo(() => ['pengurus', 'admin', 'sekretaris_rt', 'sekretaris', 'ketua_rt', 'admin_rw'], []);
+  const isPengurus = useMemo(() => allowedRoles.includes(user?.role || ''), [allowedRoles, user?.role]);
+  const isWarga = useMemo(() => user?.role === 'warga', [user?.role]);
+  const isSuperAdmin = useMemo(() => user?.role === 'admin' || user?.role === 'admin_sistem', [user?.role]);
+  const isAdminRW = useMemo(() => user?.role === 'admin_rw', [user?.role]);
+  const isSekretaris = useMemo(() => user?.role === 'sekretaris_rt' || user?.role === 'sekretaris', [user?.role]);
+  const isKetuaRT = useMemo(() => user?.role === 'ketua_rt', [user?.role]);
 
   // Set mounted setelah component mount di client
   useEffect(() => {
@@ -77,7 +92,7 @@ export default function DashboardPage() {
     }
   }, [mounted, hasCheckedAuth, isAuthenticated, router]);
 
-  // Fetch RW list untuk Super Admin
+  // Fetch RW list untuk Super Admin (TANPA set default filter - default semua RW)
   useEffect(() => {
     if (!mounted || !isSuperAdmin) return;
     
@@ -85,6 +100,13 @@ export default function DashboardPage() {
       try {
         const { data } = await api.get('/reports/stats/rw-list');
         setRwList(data.rwList || []);
+        // Simpan ringkasan semua RW (total RW, total RT, dll)
+        setRwListSummary({
+          totalRW: data.totalRW || 0,
+          totalRT: data.totalRT || 0,
+          rwList: data.rwList || []
+        });
+        // TIDAK set default RW filter - superadmin default melihat semua RW
       } catch (e: any) {
         console.error('Error fetching RW list:', e);
       }
@@ -113,6 +135,36 @@ export default function DashboardPage() {
     };
     fetchRtList();
   }, [mounted, isAdminRW, isSuperAdmin, rwFilter]);
+
+  // Fetch statistik per RT untuk RW Admin
+  useEffect(() => {
+    if (!mounted || !isAdminRW) return;
+    
+    const fetchRtStats = async () => {
+      try {
+        const { data } = await api.get('/reports/stats/by-rt');
+        setRtStats(data);
+      } catch (e: any) {
+        console.error('Error fetching RT stats:', e);
+      }
+    };
+    fetchRtStats();
+  }, [mounted, isAdminRW]);
+
+  // Fetch ringkasan RW untuk Super Admin (default RW 1)
+  useEffect(() => {
+    if (!mounted || !isSuperAdmin || !rwFilter) return;
+    
+    const fetchRwSummary = async () => {
+      try {
+        const { data } = await api.get(`/reports/stats/rw-summary?rwFilter=${rwFilter}`);
+        setRwSummary(data);
+      } catch (e: any) {
+        console.error('Error fetching RW summary:', e);
+      }
+    };
+    fetchRwSummary();
+  }, [mounted, isSuperAdmin, rwFilter]);
 
   // Fetch stats (must be declared before any early return to keep hook order stable)
   useEffect(() => {
@@ -651,9 +703,9 @@ export default function DashboardPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
         {isPengurus ? (
           <div className="space-y-8 animate-fade-in">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <h2 className="text-3xl font-bold text-gray-900">{dashboardLabel()}</h2>
-              <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{dashboardLabel()}</h2>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-3 flex-wrap">
                   {isSuperAdmin && rwList.length > 0 && (
                     <select
@@ -662,7 +714,7 @@ export default function DashboardPage() {
                         setRwFilter(e.target.value);
                         setRtFilter(''); // Reset RT filter saat RW berubah
                       }}
-                      className="px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
+                      className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
                     >
                       <option value="">Semua RW</option>
                       {rwList.map((rw) => (
@@ -676,7 +728,7 @@ export default function DashboardPage() {
                     <select
                       value={rtFilter}
                       onChange={(e) => setRtFilter(e.target.value)}
-                      className="px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
+                      className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
                     >
                       <option value="">Semua RT</option>
                       {rtList.map((rt) => (
@@ -690,7 +742,7 @@ export default function DashboardPage() {
                     <select
                       value={rtFilter}
                       onChange={(e) => setRtFilter(e.target.value)}
-                      className="px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
+                      className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white hover:border-gray-400 transition-colors font-medium shadow-sm"
                     >
                       <option value="">Semua RT</option>
                       {rtList.map((rt) => (
@@ -724,7 +776,7 @@ export default function DashboardPage() {
                 <RealtimeFeed />
               </div>
               </div>
-              {isSuperAdmin && (rwFilter || rtFilter) && (
+              {isSuperAdmin && (
                 <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4 flex items-start gap-3">
                   <BarChart3 className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-purple-700">
@@ -734,7 +786,7 @@ export default function DashboardPage() {
                     ) : rwFilter ? (
                       <strong>RW {rwFilter}</strong>
                     ) : (
-                      'Semua RW'
+                      <strong>Semua RW (Akumulasi)</strong>
                     )}
                   </p>
                 </div>
@@ -766,36 +818,133 @@ export default function DashboardPage() {
             {/* Role-specific panels */}
               {isSuperAdmin ? (
                 <div className="space-y-4">
+                  {/* Ringkasan RW untuk Super Admin */}
+                  {rwSummary && rwFilter && (
+                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl p-6 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-bold text-purple-900">Ringkasan {rwFilter}</h3>
+                        <Building2 className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-sm text-gray-600 mb-1">Total RT</div>
+                          <div className="text-2xl font-bold text-purple-700">{rwSummary.totalRT || 0}</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-sm text-gray-600 mb-1">Total Warga</div>
+                          <div className="text-2xl font-bold text-blue-700">{rwSummary.totalWarga || 0}</div>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-sm text-gray-600 mb-1">Total Laporan</div>
+                          <div className="text-2xl font-bold text-green-700">{rwSummary.totalReports || 0}</div>
+                        </div>
+                        {rwSummary.rtTerbesar && (
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="text-sm text-gray-600 mb-1">RT Terbesar</div>
+                            <div className="text-lg font-bold text-orange-700">{rwSummary.rtTerbesar.rt}</div>
+                            <div className="text-xs text-gray-500">{rwSummary.rtTerbesar.wargaCount} warga</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-purple-200 grid grid-cols-3 gap-2 sm:gap-3">
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Pending</div>
+                          <div className="text-lg font-semibold text-amber-600">{rwSummary.pendingReports || 0}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Diproses</div>
+                          <div className="text-lg font-semibold text-blue-600">{rwSummary.inProgressReports || 0}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Selesai</div>
+                          <div className="text-lg font-semibold text-green-600">{rwSummary.resolvedReports || 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4 flex items-start gap-3">
                     <Info className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
                     <div>
                       <h3 className="font-semibold text-purple-900 mb-2">Overview Sistem</h3>
                       <p className="text-sm text-purple-700 mb-2">
-                        Anda melihat data dari semua RT/RW dalam sistem. Gunakan filter di atas untuk melihat statistik per RW atau per RT.
+                        {rwFilter ? `Menampilkan data dari ${rwFilter}. ` : 'Anda melihat data dari semua RT/RW dalam sistem. '}
+                        Gunakan filter di atas untuk melihat statistik per RW atau per RT.
                       </p>
-                      <div className="mt-3 pt-3 border-t border-purple-200">
-                        <p className="text-xs text-purple-600 font-medium mb-1">Best Practice Filter:</p>
-                        <ul className="text-xs text-purple-600 space-y-1 list-disc list-inside">
-                          <li>Pilih <strong>RW</strong> terlebih dahulu untuk melihat statistik semua RT dalam RW tersebut</li>
-                          <li>Setelah memilih RW, pilih <strong>RT</strong> untuk melihat statistik spesifik RT tersebut</li>
-                          <li>Biarkan kosong untuk melihat statistik semua RW/RT dalam sistem</li>
-                        </ul>
-                      </div>
+                      {!rwFilter && (
+                        <div className="mt-3 pt-3 border-t border-purple-200">
+                          <p className="text-xs text-purple-600 font-medium mb-1">Best Practice Filter:</p>
+                          <ul className="text-xs text-purple-600 space-y-1 list-disc list-inside">
+                            <li>Pilih <strong>RW</strong> terlebih dahulu untuk melihat statistik semua RT dalam RW tersebut</li>
+                            <li>Setelah memilih RW, pilih <strong>RT</strong> untuk melihat statistik spesifik RT tersebut</li>
+                            <li>Biarkan kosong untuk melihat statistik semua RW/RT dalam sistem</li>
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {isAdminRW && (
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
-                      <Building2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <h3 className="font-semibold text-blue-900 mb-2">Data {getRtRwLabel()} Anda</h3>
-                        <p className="text-sm text-blue-700">
-                          Statistik dan laporan dari semua RT dalam {getRtRwLabel()} Anda. Gunakan dropdown di atas untuk melihat statistik per RT.
-                        </p>
+                    <>
+                      {/* Statistik per RT untuk RW Admin */}
+                      {rtStats && rtStats.rtStats && rtStats.rtStats.length > 0 && (
+                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-6 shadow-sm">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-blue-900">Statistik per RT dalam {getRtRwLabel()}</h3>
+                            <Users className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {rtStats.rtStats.map((rt: any) => (
+                              <div key={rt.rt} className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-bold text-lg text-blue-900">{rt.label}</h4>
+                                  <Building2 className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Warga:</span>
+                                    <span className="font-semibold text-gray-900">{rt.wargaCount || 0}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Total Laporan:</span>
+                                    <span className="font-semibold text-gray-900">{rt.totalReports || 0}</span>
+                                  </div>
+                                  <div className="pt-2 border-t border-gray-200 grid grid-cols-3 gap-2 text-xs">
+                                    <div className="text-center">
+                                      <div className="text-amber-600 font-semibold">{rt.pendingReports || 0}</div>
+                                      <div className="text-gray-500">Pending</div>
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="text-blue-600 font-semibold">{rt.inProgressReports || 0}</div>
+                                      <div className="text-gray-500">Proses</div>
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="text-green-600 font-semibold">{rt.resolvedReports || 0}</div>
+                                      <div className="text-gray-500">Selesai</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                        <Building2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h3 className="font-semibold text-blue-900 mb-2">Data {getRtRwLabel()} Anda</h3>
+                          <p className="text-sm text-blue-700">
+                            Statistik dan laporan dari semua RT dalam {getRtRwLabel()} Anda. Gunakan dropdown di atas untuk melihat statistik per RT.
+                          </p>
+                          {rtStats && rtStats.rtStats && (
+                            <p className="text-xs text-blue-600 mt-2">
+                              Total RT yang dinaungi: <strong>{rtStats.rtStats.length}</strong>
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
                   {isKetuaRT && (
                     <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 flex items-start gap-3">

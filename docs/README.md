@@ -50,6 +50,14 @@ Selamat datang di dokumentasi lengkap untuk project **LaporIn** - Platform Lapor
    - UI/UX Features
    - Security Features
 
+6. **[BIOMETRIC_BLOCKCHAIN.md](./BIOMETRIC_BLOCKCHAIN.md)**
+   - Dokumentasi lengkap biometric blockchain integration
+   - Di mana data biometric disimpan (database vs blockchain)
+   - Keamanan data (encryption, hash, privacy)
+   - Alur penyimpanan dan verifikasi
+   - Blockchain event structure
+   - Privacy-first approach (GDPR-compliant)
+
 ---
 
 ### 🔧 Troubleshooting
@@ -121,7 +129,9 @@ docs/
 ├── SETUP_POSTGRESQL.md       # Setup PostgreSQL detail
 ├── TECH_STACK.md             # Tech stack documentation
 ├── FEATURES.md               # Features documentation
-└── TROUBLESHOOTING.md        # Troubleshooting guide
+├── BIOMETRIC_BLOCKCHAIN.md   # Biometric blockchain integration
+├── TROUBLESHOOTING.md        # Troubleshooting guide
+└── archive/                  # Dokumentasi historis/duplikat
 ```
 
 ---

@@ -103,10 +103,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.BANTUAN_DISTRIBUTE,
   ],
   
-  // Admin RW - Manage RT/RW mereka
+  // Admin RW - Manage RT/RW mereka (tidak bisa approve laporan, hanya monitor)
   admin_rw: [
     PERMISSIONS.REPORT_VIEW_RT_RW,
-    PERMISSIONS.REPORT_UPDATE_STATUS,
+    // PERMISSIONS.REPORT_UPDATE_STATUS, // Hanya pengurus yang bisa approve
     PERMISSIONS.USER_CREATE,
     PERMISSIONS.USER_VIEW_RT_RW,
     PERMISSIONS.USER_VERIFY,
@@ -122,10 +122,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.BANTUAN_DISTRIBUTE,
   ],
   
-  // Ketua RT - Manage RT mereka
+  // Ketua RT - Manage RT mereka (tidak bisa approve laporan, hanya monitor)
   ketua_rt: [
     PERMISSIONS.REPORT_VIEW_RT_RW,
-    PERMISSIONS.REPORT_UPDATE_STATUS,
+    // PERMISSIONS.REPORT_UPDATE_STATUS, // Hanya pengurus yang bisa approve
     PERMISSIONS.USER_CREATE,
     PERMISSIONS.USER_VIEW_RT_RW,
     PERMISSIONS.USER_VERIFY,
@@ -140,10 +140,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.BANTUAN_APPROVE,
   ],
   
-  // Sekretaris RT - Manage RT mereka
+  // Sekretaris RT - Manage RT mereka (tidak bisa approve laporan, hanya monitor)
   sekretaris_rt: [
     PERMISSIONS.REPORT_VIEW_RT_RW,
-    PERMISSIONS.REPORT_UPDATE_STATUS,
+    // PERMISSIONS.REPORT_UPDATE_STATUS, // Hanya pengurus yang bisa approve
     PERMISSIONS.USER_CREATE,
     PERMISSIONS.USER_VIEW_RT_RW,
     PERMISSIONS.USER_VERIFY,
@@ -156,10 +156,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.BANTUAN_VIEW_RT_RW,
   ],
   
-  // Sekretaris (alias) - sama seperti Sekretaris RT namun nama role general
+  // Sekretaris (alias) - sama seperti Sekretaris RT namun nama role general (tidak bisa approve laporan, hanya monitor)
   sekretaris: [
     PERMISSIONS.REPORT_VIEW_RT_RW,
-    PERMISSIONS.REPORT_UPDATE_STATUS,
+    // PERMISSIONS.REPORT_UPDATE_STATUS, // Hanya pengurus yang bisa approve
     PERMISSIONS.USER_CREATE,
     PERMISSIONS.USER_VIEW_RT_RW,
     PERMISSIONS.USER_VERIFY,

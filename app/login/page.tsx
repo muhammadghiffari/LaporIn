@@ -211,15 +211,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50" suppressHydrationWarning>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in" suppressHydrationWarning>
+      <div className="max-w-md w-full space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8 bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in mx-4" suppressHydrationWarning>
         <div className="text-center" suppressHydrationWarning>
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl mb-4 shadow-lg" suppressHydrationWarning>
             <span className="text-white font-bold text-2xl">L</span>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
             LaporIn
           </h2>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-sm sm:text-base text-gray-600">
             Masuk ke akun Anda
           </p>
         </div>

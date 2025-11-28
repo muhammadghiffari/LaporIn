@@ -1,10 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '@/lib/api';
 import useAuthStore from '@/store/authStore';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from './Toast';
+import { DataGrid, GridColDef, GridActionsCellItem, GridToolbar } from '@mui/x-data-grid';
+import { Box, Button, Chip, IconButton, Paper, Tooltip } from '@mui/material';
+import { FileDownload, PlayArrow, CheckCircle } from '@mui/icons-material';
+import { exportToExcel, formatReportsForExcel } from '@/lib/exportToExcel';
 
 interface Report {
   id: number;
@@ -25,25 +29,16 @@ export default function RTQueuePanel() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true);
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 5; // 5 item per halaman
   const { toasts, success, error: showError, removeToast } = useToast();
   const canManageStatus = ['pengurus', 'ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(user?.role || '');
 
-  // Calculate pagination
-  const totalPages = Math.ceil(reports.length / itemsPerPage);
-  const startIndex = (page - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedReports = reports.slice(startIndex, endIndex);
-
-  const fetchReports = async (isBackgroundRefresh = false) => {
+  const fetchReports = useCallback(async (isBackgroundRefresh = false) => {
     if (!isBackgroundRefresh) {
       setLoading(true);
     }
     try {
       const response = await api.get('/reports');
       
-      // Backend returns { data: [...], total, page, limit }
       let reportsData: Report[] = [];
       if (Array.isArray(response.data)) {
         reportsData = response.data;
@@ -51,51 +46,43 @@ export default function RTQueuePanel() {
         reportsData = response.data.data || response.data.reports || response.data.results || [];
       }
       
-      // Ensure it's an array
       if (!Array.isArray(reportsData)) {
         reportsData = [];
       }
       
-      // Filter client-side by RT/RW user (jika perlu)
-      // Admin dan Pengurus bisa lihat semua laporan tanpa filter RT/RW
-      const rtRw = user?.rt_rw || '';
-      let list: Report[] = reportsData;
-      
-      // Hanya filter RT/RW untuk role RT/RW (ketua_rt, sekretaris_rt/sekretaris, admin_rw)
-      // Admin dan Pengurus tidak perlu filter
-      if (rtRw && ['ketua_rt', 'sekretaris_rt', 'sekretaris', 'admin_rw'].includes(user?.role || '')) {
-        list = list.filter((r: any) => {
-          const reportRtRw = r.rt_rw || r.location || '';
-          return reportRtRw.includes(rtRw) || rtRw.includes(reportRtRw);
-        });
-      }
-      // Admin dan Pengurus melihat semua laporan tanpa filter RT/RW
+      let list: Report[] = [...reportsData];
       
       // Filter berdasarkan status jika checkbox checked
       if (onlyPending) {
-        list = list.filter((r) => r.status === 'pending' || r.status === 'in_progress');
+        list = list.filter((r) => {
+          const status = (r.status || '').toLowerCase().trim();
+          return status === 'pending' || status === 'in_progress';
+        });
       }
       
-      console.log('[RTQueuePanel] Filtered reports:', list.length, 'from', reportsData.length);
+      // Sort by created_at desc (terbaru di atas)
+      list.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
+      });
+      
       setReports(list);
-      // Reset to page 1 when reports change
-      setPage(1);
     } catch (e: any) {
       console.error('[RTQueuePanel] Error fetching reports:', e);
       setReports([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [onlyPending]);
 
   useEffect(() => {
     if (user) {
       fetchReports();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onlyPending, user]);
+  }, [user, fetchReports]);
 
-  // Realtime polling - refresh setiap 10 detik untuk update realtime
+  // Realtime polling - refresh setiap 10 detik
   useEffect(() => {
     if (!user) return;
     
@@ -104,13 +91,12 @@ export default function RTQueuePanel() {
       fetchReports(true).finally(() => {
         setTimeout(() => setIsRefreshing(false), 500);
       });
-    }, 10000); // Poll setiap 10 detik untuk update realtime
+    }, 10000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, onlyPending]);
+  }, [user, fetchReports]);
 
-  const updateStatus = async (id: number, status: string) => {
+  const updateStatus = useCallback(async (id: number, status: string) => {
     try {
       await api.patch(`/reports/${id}/status`, { status });
       const statusLabels: Record<string, string> = {
@@ -124,172 +110,319 @@ export default function RTQueuePanel() {
     } catch (err: any) {
       showError(err.response?.data?.error || 'Gagal mengubah status laporan. Silakan coba lagi.');
     }
-  };
+  }, [fetchReports, success, showError]);
+
+  const handleExportExcel = useCallback(() => {
+    if (reports.length === 0) {
+      showError('Tidak ada data untuk diekspor');
+      return;
+    }
+    
+    const formattedData = formatReportsForExcel(reports);
+    exportToExcel(formattedData, 'laporan_warga', 'Laporan Warga');
+    success('Data berhasil diekspor ke Excel');
+  }, [reports, showError, success]);
+
+  const columns: GridColDef[] = useMemo(() => [
+    {
+      field: 'title',
+      headerName: 'Judul Laporan',
+      flex: 2,
+      minWidth: 200,
+      renderCell: (params) => (
+        <Box>
+          <Box sx={{ fontWeight: 600, color: 'text.primary' }}>
+            {params.row.title}
+          </Box>
+          <Box sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
+            {params.row.description?.substring(0, 100)}
+            {params.row.description?.length > 100 ? '...' : ''}
+          </Box>
+        </Box>
+      ),
+    },
+    {
+      field: 'user_name',
+      headerName: 'Pelapor',
+      width: 150,
+      filterable: true,
+    },
+    {
+      field: 'urgency',
+      headerName: 'Urgensi',
+      width: 130,
+      type: 'singleSelect',
+      valueOptions: ['high', 'medium', 'low'],
+      filterable: true,
+      renderCell: (params) => {
+        const colors: Record<string, { bg: string; color: string }> = {
+          high: { bg: '#FEE2E2', color: '#991B1B' },
+          medium: { bg: '#FEF3C7', color: '#92400E' },
+          low: { bg: '#F3F4F6', color: '#374151' },
+        };
+        const color = colors[params.value] || colors.low;
+        return (
+          <Chip
+            label={params.value || 'Belum diproses'}
+            size="small"
+            sx={{
+              bgcolor: color.bg,
+              color: color.color,
+              fontWeight: 600,
+            }}
+          />
+        );
+      },
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 140,
+      type: 'singleSelect',
+      valueOptions: ['pending', 'in_progress', 'resolved', 'cancelled'],
+      filterable: true,
+      renderCell: (params) => {
+        const colors: Record<string, { bg: string; color: string; label: string }> = {
+          pending: { bg: '#FEF3C7', color: '#92400E', label: 'Menunggu' },
+          in_progress: { bg: '#DBEAFE', color: '#1E40AF', label: 'Diproses' },
+          resolved: { bg: '#D1FAE5', color: '#065F46', label: 'Selesai' },
+          cancelled: { bg: '#F3F4F6', color: '#374151', label: 'Dibatalkan' },
+        };
+        const color = colors[params.value] || colors.pending;
+        return (
+          <Chip
+            label={color.label || params.value}
+            size="small"
+            sx={{
+              bgcolor: color.bg,
+              color: color.color,
+              fontWeight: 600,
+            }}
+          />
+        );
+      },
+    },
+    {
+      field: 'location',
+      headerName: 'Lokasi',
+      width: 180,
+      filterable: true,
+    },
+    {
+      field: 'created_at',
+      headerName: 'Tanggal Dibuat',
+      width: 180,
+      type: 'dateTime',
+      filterable: true,
+      valueGetter: (value) => value ? new Date(value) : null,
+      renderCell: (params) => {
+        if (!params.value) return '-';
+        return new Date(params.value).toLocaleString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      },
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Aksi',
+      width: 200,
+      getActions: (params) => {
+        const actions = [];
+        
+        if (canManageStatus) {
+          if (params.row.status === 'pending') {
+            actions.push(
+              <GridActionsCellItem
+                icon={<Tooltip title="Mulai Proses"><PlayArrow /></Tooltip>}
+                label="Mulai Proses"
+                onClick={() => updateStatus(params.row.id, 'in_progress')}
+                showInMenu={false}
+                sx={{ color: '#3B82F6' }}
+              />
+            );
+          }
+          
+          if (params.row.status !== 'resolved') {
+            actions.push(
+              <GridActionsCellItem
+                icon={<Tooltip title="Selesaikan"><CheckCircle /></Tooltip>}
+                label="Selesaikan"
+                onClick={() => updateStatus(params.row.id, 'resolved')}
+                showInMenu={false}
+                sx={{ color: '#10B981' }}
+              />
+            );
+          }
+        }
+        
+        return actions;
+      },
+    },
+  ], [canManageStatus, updateStatus]);
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div className="space-y-6">
-      {/* Realtime indicator */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* Header dengan controls */}
       {isRefreshing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2 text-sm text-blue-700 animate-pulse">
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-          <span>Memperbarui antrian realtime...</span>
-        </div>
-      )}
-      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-        <h3 className="text-xl font-bold text-gray-900">Antrian Laporan Warga</h3>
-        <label className="text-sm text-gray-600 flex items-center gap-2 cursor-pointer hover:text-gray-900 transition-colors">
+          <Box
+            sx={{
+              bgcolor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: 2,
+              p: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              fontSize: '0.875rem',
+              color: '#1E40AF',
+              animation: 'pulse 2s infinite',
+            }}
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: '#3B82F6',
+                animation: 'pulse 1s infinite',
+              }}
+            />
+            Memperbarui antrian realtime...
+          </Box>
+        )}
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            border: '1px solid #E5E7EB',
+            borderRadius: 3,
+          }}
+        >
+          <Box sx={{ fontWeight: 700, fontSize: '1.25rem', color: '#111827' }}>
+            Antrian Laporan Warga
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <input
             type="checkbox"
             checked={onlyPending}
             onChange={(e) => setOnlyPending(e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                style={{
+                  width: 16,
+                  height: 16,
+                  cursor: 'pointer',
+                }}
+              />
+              <Box component="label" sx={{ fontSize: '0.875rem', color: '#6B7280', cursor: 'pointer' }}>
+                Tampilkan hanya pending / in_progress
+              </Box>
+            </Box>
+            
+            <Button
+              variant="outlined"
+              startIcon={<FileDownload />}
+              onClick={handleExportExcel}
+              disabled={reports.length === 0}
+              sx={{
+                borderColor: '#3B82F6',
+                color: '#3B82F6',
+                '&:hover': {
+                  borderColor: '#2563EB',
+                  bgcolor: '#EFF6FF',
+                },
+              }}
+            >
+              Export Excel
+            </Button>
+          </Box>
+        </Paper>
+
+        {/* DataGrid */}
+        <Paper
+          elevation={0}
+          sx={{
+            height: 600,
+            width: '100%',
+            border: '1px solid #E5E7EB',
+            borderRadius: 3,
+            '& .MuiDataGrid-root': {
+              border: 'none',
+            },
+            '& .MuiDataGrid-cell': {
+              borderBottom: '1px solid #F3F4F6',
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: '#F9FAFB',
+              borderBottom: '2px solid #E5E7EB',
+            },
+            '& .MuiDataGrid-footerContainer': {
+              borderTop: '1px solid #E5E7EB',
+            },
+          }}
+        >
+          <DataGrid
+            rows={reports}
+            columns={columns}
+            loading={loading}
+            disableRowSelectionOnClick
+            pageSizeOptions={[10, 25, 50, 100]}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 10 },
+              },
+              sorting: {
+                sortModel: [{ field: 'created_at', sort: 'desc' }],
+              },
+            }}
+            slots={{
+              toolbar: GridToolbar,
+            }}
+            slotProps={{
+              toolbar: {
+                showQuickFilter: true,
+                quickFilterProps: { debounceMs: 500 },
+                printOptions: { disableToolbarButton: true },
+              },
+            }}
+            sx={{
+              '& .MuiDataGrid-toolbarContainer': {
+                p: 2,
+                borderBottom: '1px solid #E5E7EB',
+              },
+              '& .MuiDataGrid-row:hover': {
+                bgcolor: '#F9FAFB',
+              },
+            }}
           />
-          <span>Tampilkan hanya pending / in_progress</span>
-        </label>
-      </div>
-      <div className="overflow-x-auto bg-white border border-gray-200 rounded-2xl shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-            <tr>
-              <th className="text-left px-4 py-3 font-semibold text-gray-900">Judul</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-900">Urgensi</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-900">Status</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-900">Waktu</th>
-              <th className="px-4 py-3 font-semibold text-gray-900 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td className="px-4 py-8 text-center" colSpan={5}>
-                  <div className="flex items-center justify-center gap-2 text-gray-500">
-                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span>Memuat...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : reports.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-center" colSpan={5}>
-                  <div className="text-gray-500">
-                    <p className="font-medium">Tidak ada laporan</p>
-                    <p className="text-sm mt-1">Semua laporan sudah ditangani</p>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              paginatedReports.map((r) => (
-                <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-gray-900">{r.title}</div>
-                    <div className="text-xs text-gray-500 line-clamp-2 mt-1">{r.description}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        r.urgency === 'high'
-                          ? 'bg-red-100 text-red-800'
-                          : r.urgency === 'medium'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {r.urgency || 'Belum diproses'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      r.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      r.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      r.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {new Date(r.created_at).toLocaleString('id-ID', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {canManageStatus ? (
-                      <div className="flex items-center justify-center gap-2">
-                        {r.status === 'pending' && (
-                          <button
-                            onClick={() => updateStatus(r.id, 'in_progress')}
-                            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
-                          >
-                            Mulai Proses
-                          </button>
-                        )}
-                        {r.status !== 'resolved' && (
-                          <button
-                            onClick={() => updateStatus(r.id, 'resolved')}
-                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium shadow-sm"
-                          >
-                            Selesaikan
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-gray-400">Hanya pengurus RT yang dapat mengubah status</p>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* Pagination */}
-      {reports.length > itemsPerPage && (
-        <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-4 py-3">
-          <div className="text-sm text-gray-600">
-            Menampilkan {startIndex + 1} - {Math.min(endIndex, reports.length)} dari {reports.length} laporan
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Sebelumnya
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => setPage(pageNum)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                    page === pageNum
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Selanjutnya
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+        </Paper>
+
+        {!canManageStatus && reports.length > 0 && (
+          <Box
+            sx={{
+              p: 1,
+              bgcolor: '#F3F4F6',
+              borderRadius: 1,
+              fontSize: '0.75rem',
+              color: '#6B7280',
+              textAlign: 'center',
+            }}
+          >
+            Hanya pengurus RT yang dapat mengubah status laporan
+          </Box>
+        )}
+      </Box>
     </>
   );
 }
-
-

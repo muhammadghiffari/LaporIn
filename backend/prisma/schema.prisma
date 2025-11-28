@@ -22,6 +22,7 @@ model User {
   faceDescriptor String?   @map("face_descriptor") @db.Text // Encrypted face descriptor (biometric)
   faceVerified   Boolean   @default(false) @map("face_verified") // Status verifikasi biometrik
   faceVerifiedAt DateTime? @map("face_verified_at") // Timestamp saat face verified
+  faceBlockchainTxHash String? @map("face_blockchain_tx_hash") @db.VarChar(255) // Blockchain transaction hash untuk biometric registration
   isVerified     Boolean   @default(false) @map("is_verified") // Status verifikasi warga oleh Admin RT/RW
   verifiedBy     Int?      @map("verified_by") // ID admin yang melakukan verifikasi
   verifiedAt     DateTime? @map("verified_at") // Timestamp saat diverifikasi
@@ -43,6 +44,7 @@ model User {
   bantuan              Bantuan[]
   chatbotConversations ChatbotConversation[]
   faceVerificationLogs FaceVerificationLog[]
+  emailVerificationCodes EmailVerificationCode[]
 
   @@map("users")
 }
@@ -56,16 +58,37 @@ model Report {
   urgency            String?  @db.VarChar(50) // 'high', 'medium', 'low'
   status             String   @default("pending") @db.VarChar(50) // 'pending', 'in_progress', 'resolved', 'rejected', 'cancelled'
   location           String?  @db.VarChar(255)
+  latitude           Float?   // Koordinat latitude GPS laporan (required untuk validasi)
+  longitude          Float?   // Koordinat longitude GPS laporan (required untuk validasi)
   imageUrl           String?  @map("image_url") @db.Text // URL atau path ke gambar (bisa base64)
   blockchainTxHash   String?  @map("blockchain_tx_hash") @db.VarChar(255)
   aiSummary          String?  @map("ai_summary") @db.Text
   cancellationReason String?  @map("cancellation_reason") @db.Text
+  isSensitive        Boolean  @default(false) @map("is_sensitive") // Laporan sensitif/rahasia - hanya admin tertentu yang bisa lihat
+  
+  // Fraud Detection Fields
+  isDuplicate        Boolean? @default(false) @map("is_duplicate")
+  duplicateScore     Float?   @map("duplicate_score")
+  similarReportId    Int?     @map("similar_report_id")
+  isSpam             Boolean? @default(false) @map("is_spam")
+  spamScore          Float?   @map("spam_score")
+  spamReasons        Json?    @map("spam_reasons")
+  qualityScore       Float?   @map("quality_score")
+  qualityIssues      Json?    @map("quality_issues")
+  isAnomaly          Boolean? @default(false) @map("is_anomaly")
+  anomalyScore       Float?   @map("anomaly_score")
+  anomalyReasons     Json?    @map("anomaly_reasons")
+  fraudChecked       Boolean  @default(false) @map("fraud_checked")
+  fraudCheckedAt     DateTime? @map("fraud_checked_at")
+  fraudScore         Float?   @map("fraud_score")
+  
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   user                User                  @relation(fields: [userId], references: [id])
   reportStatusHistory ReportStatusHistory[]
   aiProcessingLog     AiProcessingLog[]
+  fraudDetectionLogs  FraudDetectionLog[]
 
   @@map("reports")
 }
@@ -170,4 +193,39 @@ model FaceVerificationLog {
   @@index([createdAt])
   @@index([verified])
   @@map("face_verification_logs")
+}
+
+model EmailVerificationCode {
+  id        Int      @id @default(autoincrement())
+  email     String   @db.VarChar(255)
+  code      String   @db.VarChar(6) // 6-digit verification code
+  type      String   @db.VarChar(50) // 'registration' | 'change_email'
+  userId    Int?     @map("user_id") // Null untuk registrasi baru, set untuk change email
+  verified  Boolean  @default(false)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([code])
+  @@index([expiresAt])
+  @@index([verified])
+  @@map("email_verification_codes")
+}
+
+model FraudDetectionLog {
+  id            Int      @id @default(autoincrement())
+  reportId      Int      @map("report_id")
+  detectionType String   @map("detection_type") @db.VarChar(50) // 'duplicate', 'spam', 'quality', 'anomaly'
+  score         Float
+  details       Json
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([detectionType])
+  @@index([createdAt])
+  @@map("fraud_detection_logs")
 }

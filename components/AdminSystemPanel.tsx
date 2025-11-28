@@ -4,19 +4,11 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import useAuthStore from '@/store/authStore';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   TextField,
   Box,
   Typography,
-  Pagination,
   IconButton,
-  Skeleton,
   Chip,
   Button,
   InputAdornment,
@@ -34,7 +26,10 @@ import {
   Search as SearchIcon,
   Delete as DeleteIcon,
   Add as AddIcon,
+  FileDownload,
 } from '@mui/icons-material';
+import { DataGrid, GridColDef, GridActionsCellItem, GridToolbar } from '@mui/x-data-grid';
+import { exportToExcel, formatUsersForExcel } from '@/lib/exportToExcel';
 
 interface UserRow {
   id: number;
@@ -64,7 +59,7 @@ export default function AdminSystemPanel() {
   const [role, setRole] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 50; // Increased for better pagination, especially for superadmin
   
   // Form state
   const [openDialog, setOpenDialog] = useState(false);
@@ -109,7 +104,10 @@ export default function AdminSystemPanel() {
       params.set('limit', itemsPerPage.toString());
       params.set('offset', ((page - 1) * itemsPerPage).toString());
       
+      console.log('[Frontend] Fetching users with params:', params.toString());
       const { data } = await api.get(`/auth/users?${params.toString()}`);
+      
+      console.log('[Frontend] Received data:', data);
       
       // Handle both array and object response
       if (Array.isArray(data)) {
@@ -118,12 +116,15 @@ export default function AdminSystemPanel() {
       } else if (data && data.data) {
         setUsers(data.data);
         setTotalPages(Math.ceil((data.total || data.data.length) / itemsPerPage) || 1);
+        console.log(`[Frontend] Total users: ${data.total}, Current page: ${data.page}, Users in this page: ${data.data.length}`);
       } else {
         setUsers([]);
         setTotalPages(1);
       }
-    } catch {
-      // ignore
+    } catch (error: any) {
+      console.error('[Frontend] Error fetching users:', error);
+      console.error('[Frontend] Error response:', error.response?.data);
+      alert(`Gagal mengambil data pengguna: ${error.response?.data?.error || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -209,23 +210,84 @@ export default function AdminSystemPanel() {
     setOpenDialog(true);
   };
 
+  // Get page title based on role
+  const getPageTitle = () => {
+    const currentRole = user?.role || '';
+    if (currentRole === 'admin' || currentRole === 'admin_sistem') {
+      return 'Kelola Pengguna (Semua Role)';
+    } else if (currentRole === 'admin_rw') {
+      return `Kelola Pengguna RW ${user?.rt_rw?.split('/')[1] || ''}`;
+    } else if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(currentRole)) {
+      return `Kelola Warga ${user?.rt_rw || ''}`;
+    }
+    return 'Kelola Pengguna';
+  };
+  
+  // Get description based on role
+  const getPageDescription = () => {
+    const currentRole = user?.role || '';
+    if (currentRole === 'admin' || currentRole === 'admin_sistem') {
+      return 'Lihat dan kelola semua pengguna sistem (Admin, RW, RT, Sekretaris, Pengurus, Warga)';
+    } else if (currentRole === 'admin_rw') {
+      return 'Lihat dan kelola RT dan warga di RW Anda';
+    } else if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(currentRole)) {
+      return 'Lihat dan kelola warga di RT Anda';
+    }
+    return '';
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Typography variant="h5" className="font-bold text-gray-900">
-          Kelola Pengguna
-        </Typography>
-        {allowedRoles.length > 0 && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenDialog}
-            className="bg-blue-600 hover:bg-blue-700 rounded-xl px-6 py-2.5"
-          >
-            Buat User Baru
-          </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#111827' }}>
+            {getPageTitle()}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {users.length > 0 && (
+            <Button
+              variant="outlined"
+              startIcon={<FileDownload />}
+              onClick={() => {
+                const formattedData = formatUsersForExcel(users);
+                exportToExcel(formattedData, 'data_pengguna', 'Data Pengguna');
+              }}
+              sx={{
+                borderColor: '#3B82F6',
+                color: '#3B82F6',
+                '&:hover': {
+                  borderColor: '#2563EB',
+                  bgcolor: '#EFF6FF',
+                },
+              }}
+            >
+              Export Excel
+            </Button>
+          )}
+          {allowedRoles.length > 0 && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenDialog}
+              sx={{
+                bgcolor: '#3B82F6',
+                '&:hover': { bgcolor: '#2563EB' },
+                borderRadius: 3,
+                px: 3,
+                py: 1.5,
+              }}
+            >
+              Buat User Baru
+            </Button>
+            )}
+          </Box>
+        </Box>
+        {getPageDescription() && (
+          <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.875rem' }}>
+            {getPageDescription()}
+          </Typography>
         )}
-      </div>
+      </Box>
 
       {/* Filters */}
       <Box className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
@@ -280,122 +342,220 @@ export default function AdminSystemPanel() {
             }}
           >
             <option value="all">Semua Peran</option>
-            <option value="warga">Warga</option>
-            <option value="pengurus">Pengurus</option>
-            <option value="sekretaris_rt">Sekretaris RT</option>
-            <option value="sekretaris">Sekretaris</option>
-            <option value="ketua_rt">Ketua RT</option>
-            <option value="admin_rw">Admin RW</option>
-            <option value="admin">Admin Sistem</option>
+            {(() => {
+              const currentRole = user?.role || '';
+              // Super Admin: semua role
+              if (currentRole === 'admin' || currentRole === 'admin_sistem') {
+                return (
+                  <>
+                    <option value="admin">Admin Sistem</option>
+                    <option value="admin_rw">Admin RW</option>
+                    <option value="ketua_rt">Ketua RT</option>
+                    <option value="sekretaris_rt">Sekretaris RT</option>
+                    <option value="sekretaris">Sekretaris</option>
+                    <option value="pengurus">Pengurus</option>
+                    <option value="warga">Warga</option>
+                  </>
+                );
+              }
+              // Admin RW: RT dan warga
+              if (currentRole === 'admin_rw') {
+                return (
+                  <>
+                    <option value="ketua_rt">Ketua RT</option>
+                    <option value="sekretaris_rt">Sekretaris RT</option>
+                    <option value="sekretaris">Sekretaris</option>
+                    <option value="pengurus">Pengurus</option>
+                    <option value="warga">Warga</option>
+                  </>
+                );
+              }
+              // RT/Sekretaris: hanya warga
+              if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(currentRole)) {
+                return (
+                  <>
+                    <option value="warga">Warga</option>
+                  </>
+                );
+              }
+              return null;
+            })()}
           </TextField>
         </div>
       </Box>
 
-      {/* Table */}
-      <TableContainer component={Paper} className="shadow-sm rounded-2xl border border-gray-200">
-        <Table>
-          <TableHead className="bg-gradient-to-r from-gray-50 to-gray-100">
-            <TableRow>
-              <TableCell className="font-semibold">Nama</TableCell>
-              <TableCell className="font-semibold">Email</TableCell>
-              <TableCell className="font-semibold">Peran</TableCell>
-              <TableCell className="font-semibold">RT/RW</TableCell>
-              <TableCell className="font-semibold">Gender</TableCell>
-              <TableCell className="font-semibold">Dibuat</TableCell>
-              <TableCell className="font-semibold text-center">Aksi</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton variant="text" width="100%" /></TableCell>
-                  <TableCell><Skeleton variant="text" width={150} /></TableCell>
-                  <TableCell><Skeleton variant="text" width={100} /></TableCell>
-                  <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                  <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                  <TableCell><Skeleton variant="text" width={120} /></TableCell>
-                  <TableCell><Skeleton variant="text" width={80} /></TableCell>
-                </TableRow>
-              ))
-            ) : users.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-12">
-                  <Typography variant="body2" className="text-gray-500">
-                    Tidak ada data pengguna ditemukan
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              users.map((u) => (
-                <TableRow key={u.id} hover className="transition-colors">
-                  <TableCell>
-                    <Typography variant="body2" className="font-medium">
-                      {u.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" className="text-gray-600">
-                      {u.email}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={ROLE_LABELS[u.role] || u.role}
-                      size="small"
-                      className="text-xs"
-                      color={u.role === 'admin' ? 'error' : u.role === 'warga' ? 'default' : 'primary'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" className="text-gray-600">
-                      {u.rt_rw || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" className="text-gray-600 capitalize">
-                      {u.jenis_kelamin?.replace('_', ' ') || '-'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" className="text-gray-600">
-                      {new Date(u.created_at).toLocaleDateString('id-ID', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Typography>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <IconButton
-                      size="small"
-                      onClick={() => removeUser(u.id)}
-                      className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                      title="Hapus Pengguna"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {/* Pagination */}
-      {!loading && users.length > 0 && (
-        <Box className="flex justify-center">
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-            shape="rounded"
-            className="rounded-xl"
-          />
-        </Box>
-      )}
+      {/* DataGrid Table */}
+      <Paper
+        elevation={0}
+        sx={{
+          height: 600,
+          width: '100%',
+          border: '1px solid #E5E7EB',
+          borderRadius: 3,
+          '& .MuiDataGrid-root': {
+            border: 'none',
+          },
+          '& .MuiDataGrid-cell': {
+            borderBottom: '1px solid #F3F4F6',
+          },
+          '& .MuiDataGrid-columnHeaders': {
+            bgcolor: '#F9FAFB',
+            borderBottom: '2px solid #E5E7EB',
+          },
+          '& .MuiDataGrid-footerContainer': {
+            borderTop: '1px solid #E5E7EB',
+          },
+        }}
+      >
+        <DataGrid
+          rows={users}
+          columns={[
+            {
+              field: 'name',
+              headerName: 'Nama',
+              flex: 1,
+              minWidth: 150,
+              filterable: true,
+            },
+            {
+              field: 'email',
+              headerName: 'Email',
+              flex: 1,
+              minWidth: 200,
+              filterable: true,
+            },
+            {
+              field: 'role',
+              headerName: 'Peran',
+              width: 150,
+              type: 'singleSelect',
+              valueOptions: ['warga', 'pengurus', 'sekretaris_rt', 'sekretaris', 'ketua_rt', 'admin_rw', 'admin'],
+              filterable: true,
+              renderCell: (params) => (
+                <Chip
+                  label={ROLE_LABELS[params.value] || params.value}
+                  size="small"
+                  color={params.value === 'admin' ? 'error' : params.value === 'warga' ? 'default' : 'primary'}
+                />
+              ),
+            },
+            {
+              field: 'rt_rw',
+              headerName: 'RT/RW',
+              width: 120,
+              filterable: true,
+              valueGetter: (value) => value || '-',
+            },
+            {
+              field: 'jenis_kelamin',
+              headerName: 'Gender',
+              width: 120,
+              filterable: true,
+              valueGetter: (value: string | null) => value ? value.replace('_', ' ') : '-',
+              renderCell: (params: any) => (
+                <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                  {params.value || '-'}
+                </Typography>
+              ),
+            },
+            {
+              field: 'created_at',
+              headerName: 'Dibuat',
+              width: 150,
+              type: 'dateTime',
+              filterable: true,
+              valueGetter: (value) => value ? new Date(value) : null,
+              renderCell: (params) => {
+                if (!params.value) return '-';
+                return new Date(params.value).toLocaleDateString('id-ID', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                });
+              },
+            },
+            {
+              field: 'actions',
+              type: 'actions',
+              headerName: 'Aksi',
+              width: 100,
+              getActions: (params: any) => {
+                const currentRole = user?.role || '';
+                const targetRole = params.row.role;
+                
+                // Cek apakah user bisa hapus target user
+                let canDelete = false;
+                
+                if (currentRole === 'admin' || currentRole === 'admin_sistem') {
+                  // Super Admin: bisa hapus semua kecuali admin lain (kecuali admin_sistem)
+                  if (currentRole === 'admin_sistem') {
+                    canDelete = true; // Admin sistem bisa hapus semua
+                  } else {
+                    canDelete = targetRole !== 'admin' && targetRole !== 'admin_sistem';
+                  }
+                } else if (currentRole === 'admin_rw') {
+                  // Admin RW: hanya bisa hapus RT dan warga di RW mereka
+                  const allowedRoles = ['warga', 'ketua_rt', 'sekretaris_rt', 'sekretaris', 'pengurus'];
+                  canDelete = allowedRoles.includes(targetRole);
+                } else if (['ketua_rt', 'sekretaris_rt', 'sekretaris'].includes(currentRole)) {
+                  // RT/Sekretaris: hanya bisa hapus warga di RT mereka
+                  canDelete = targetRole === 'warga';
+                }
+                
+                // Cegah hapus diri sendiri
+                if (params.row.id === user?.id) {
+                  canDelete = false;
+                }
+                
+                if (!canDelete) {
+                  return [];
+                }
+                
+                return [
+                  <GridActionsCellItem
+                    key="delete"
+                    icon={<DeleteIcon />}
+                    label="Hapus"
+                    onClick={() => removeUser(params.row.id)}
+                    showInMenu={false}
+                  />,
+                ];
+              },
+            },
+          ]}
+          loading={loading}
+          disableRowSelectionOnClick
+          pageSizeOptions={[10, 25, 50, 100]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 10 },
+            },
+            sorting: {
+              sortModel: [{ field: 'created_at', sort: 'desc' }],
+            },
+          }}
+          slots={{
+            toolbar: GridToolbar,
+          }}
+          slotProps={{
+            toolbar: {
+              showQuickFilter: true,
+              quickFilterProps: { debounceMs: 500 },
+              printOptions: { disableToolbarButton: true },
+              csvOptions: { disableToolbarButton: true },
+            },
+          }}
+          sx={{
+            '& .MuiDataGrid-toolbarContainer': {
+              p: 2,
+              borderBottom: '1px solid #E5E7EB',
+            },
+            '& .MuiDataGrid-row:hover': {
+              bgcolor: '#F9FAFB',
+            },
+          }}
+        />
+      </Paper>
 
       {/* Create User Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

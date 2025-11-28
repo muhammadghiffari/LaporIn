@@ -67,6 +67,27 @@ class ApiService {
     });
   }
 
+  // Detect face dari foto (base64) - untuk real-time detection, tidak perlu auth
+  Future<Response> detectFaceFromPhoto(String photoBase64) async {
+    return await _dio.post(ApiConfig.faceDetect, data: {
+      'photo': photoBase64,
+    });
+  }
+
+  // Register face dari foto (base64) - backend akan extract embedding otomatis
+  Future<Response> registerFaceFromPhoto(String photoBase64) async {
+    return await _dio.post(ApiConfig.faceRegister, data: {
+      'photo': photoBase64,
+    });
+  }
+
+  // Verify face dari foto (base64) - backend akan extract embedding dan compare otomatis
+  Future<Response> verifyFaceFromPhoto(String photoBase64) async {
+    return await _dio.post(ApiConfig.faceVerify, data: {
+      'photo': photoBase64,
+    });
+  }
+
   // Reports
   Future<Response> createReport(Map<String, dynamic> data) async {
     return await _dio.post(ApiConfig.reports, data: data);
@@ -103,11 +124,25 @@ class ApiService {
   }
 
   // Chat
-  Future<Response> sendChatMessage(String message, List<Map<String, dynamic>> messages) async {
-    return await _dio.post(ApiConfig.chat, data: {
+  Future<Response> sendChatMessage(
+    String message,
+    List<Map<String, dynamic>> messages, {
+    bool newSession = false,
+    Map<String, double>? location,
+  }) async {
+    final data = <String, dynamic>{
       'message': message,
       'messages': messages,
-    });
+      'newSession': newSession,
+    };
+    
+    // Tambahkan lokasi GPS jika tersedia
+    if (location != null && location['latitude'] != null && location['longitude'] != null) {
+      data['latitude'] = location['latitude']!;
+      data['longitude'] = location['longitude']!;
+    }
+    
+    return await _dio.post(ApiConfig.chat, data: data);
   }
 
   // Users
@@ -120,6 +155,37 @@ class ApiService {
     return await _dio.post('/reports/reverse-geocode', data: {
       'latitude': latitude,
       'longitude': longitude,
+    });
+  }
+
+  // Email Verification
+  Future<Response> sendVerificationCode(String email, {String type = 'registration'}) async {
+    return await _dio.post(ApiConfig.sendVerificationCode, data: {
+      'email': email,
+      'type': type,
+    });
+  }
+
+  Future<Response> verifyCode(String email, String code, {String type = 'registration'}) async {
+    return await _dio.post(ApiConfig.verifyCode, data: {
+      'email': email,
+      'code': code,
+      'type': type,
+    });
+  }
+
+  // Profile
+  Future<Response> updateProfile({String? name, String? jenisKelamin}) async {
+    return await _dio.patch(ApiConfig.updateProfile, data: {
+      if (name != null) 'name': name,
+      if (jenisKelamin != null) 'jenis_kelamin': jenisKelamin,
+    });
+  }
+
+  Future<Response> changePassword(String currentPassword, String newPassword) async {
+    return await _dio.patch(ApiConfig.changePassword, data: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
     });
   }
 }
