@@ -28,9 +28,6 @@
 
 **Platform civic tech untuk mengelola laporan warga di level RT/RW dengan integrasi AI untuk klasifikasi otomatis dan Blockchain untuk audit trail yang immutable.**
 
-> **🏅 Hackathon IT Fair XIV 2025**  
-> *"Code The Future: Smart Solutions with AI & Blockchain"*
-
 [![Next.js](https://img.shields.io/badge/Next.js-16.0.3-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2.0-blue)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
@@ -452,20 +449,15 @@ Dokumen historis/duplikat sudah dipindahkan ke [`docs/archive/`](./docs/archive)
 
 **© 2025 Weladalah Team. All Rights Reserved.**
 
-Platform LaporIn dikembangkan oleh **Weladalah Team** untuk **IT Fair XIV Hackathon 2025** dengan tema *"Code The Future: Smart Solutions with AI & Blockchain"*.
+Platform LaporIn dikembangkan oleh **Weladalah Team**.
 
 **Hak Cipta:**
 - Semua kode, desain, dan dokumentasi dalam repository ini adalah hak cipta **Weladalah Team**.
 - Penggunaan untuk tujuan pendidikan dan non-komersial diperbolehkan dengan atribusi.
 - Untuk penggunaan komersial, silakan hubungi tim pengembang.
 
-**Lisensi:**
-Proyek ini dibuat untuk kompetisi hackathon. Untuk informasi lisensi lebih lanjut, silakan hubungi tim pengembang.
-
 ---
 
 **Made with ❤️ by Weladalah Team**
-
-🚀 **Code The Future: Smart Solutions with AI & Blockchain** 🚀
 
 </div>
