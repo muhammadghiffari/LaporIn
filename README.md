@@ -2,29 +2,7 @@
 
 <div align="center">
 
-<!-- LaporIn Logo - SVG Inline -->
-<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#0099CC;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <!-- Background rounded square -->
-  <rect x="20" y="20" width="160" height="160" rx="24" ry="24" fill="url(#logoGradient)" stroke="#0099CC" stroke-width="4"/>
-  <!-- Central horizontal element -->
-  <rect x="80" y="96" width="40" height="8" rx="4" fill="white"/>
-  <!-- Curved lines from center -->
-  <path d="M 100 100 Q 85 90 80 80" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 100 100 Q 115 90 120 80" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 100 100 Q 85 110 80 120" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M 100 100 Q 115 110 120 120" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <!-- Spirals at corners -->
-  <circle cx="80" cy="80" r="3" fill="white"/>
-  <circle cx="120" cy="80" r="3" fill="white"/>
-  <circle cx="80" cy="120" r="3" fill="white"/>
-  <circle cx="120" cy="120" r="3" fill="white"/>
-</svg>
+![LaporIn Logo](./assets/images/laporin-logo.png)
 
 **Platform civic tech untuk mengelola laporan warga di level RT/RW dengan integrasi AI untuk klasifikasi otomatis dan Blockchain untuk audit trail yang immutable.**
 
