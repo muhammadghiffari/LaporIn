@@ -6,30 +6,32 @@ Selamat datang di dokumentasi lengkap untuk project **LaporIn** - Platform Lapor
 
 ## 📖 Daftar Dokumentasi
 
-### 🚀 Getting Started
+### 🎯 Tentang LaporIn
 
-1. **[QUICK_START.md](./QUICK_START.md)**
-   - Panduan cepat untuk menjalankan LaporIn dalam 5 menit
-   - Setup minimal yang diperlukan
-   - Langkah-langkah singkat
+1. **[FEATURES.md](./FEATURES.md)**
+   - Daftar lengkap semua fitur
+   - Fitur untuk Warga
+   - Fitur untuk Admin & Pengurus
+   - AI Features
+   - Blockchain Features
+   - Analytics & Reporting
+   - Security Features
 
-2. **[SETUP_GUIDE.md](./SETUP_GUIDE.md)**
-   - Panduan setup lengkap step-by-step
-   - Install dependencies
-   - Konfigurasi environment variables
-   - Deploy smart contract
-   - Run development servers
+2. **[WORKFLOW.md](./WORKFLOW.md)**
+   - Alur kerja sistem
+   - Workflow pelaporan warga
+   - Alur status laporan
+   - Best practice workflow
 
-3. **[SETUP_POSTGRESQL.md](./SETUP_POSTGRESQL.md)**
-   - Setup PostgreSQL database detail
-   - Install PostgreSQL (macOS, Linux, Windows, Docker)
-   - Buat database & apply schema
-   - Seed data
-   - Troubleshooting database
+3. **[CHATBOT.md](./CHATBOT.md)**
+   - Dokumentasi chatbot AI
+   - Cara kerja NLP
+   - Intent detection
+   - Entity extraction
+   - Context-aware conversation
+   - Auto-report generation
 
----
-
-### 📘 Technical Documentation
+### 🔧 Technical Documentation
 
 4. **[TECH_STACK.md](./TECH_STACK.md)**
    - Detail lengkap teknologi yang digunakan
@@ -40,17 +42,7 @@ Selamat datang di dokumentasi lengkap untuk project **LaporIn** - Platform Lapor
    - Database schema
    - Security features
 
-5. **[FEATURES.md](./FEATURES.md)**
-   - Daftar lengkap semua fitur
-   - Fitur untuk Warga
-   - Fitur untuk Admin & Pengurus
-   - AI Features
-   - Blockchain Features
-   - Analytics & Reporting
-   - UI/UX Features
-   - Security Features
-
-6. **[BIOMETRIC_BLOCKCHAIN.md](./BIOMETRIC_BLOCKCHAIN.md)**
+5. **[BIOMETRIC_BLOCKCHAIN.md](./BIOMETRIC_BLOCKCHAIN.md)**
    - Dokumentasi lengkap biometric blockchain integration
    - Di mana data biometric disimpan (database vs blockchain)
    - Keamanan data (encryption, hash, privacy)
@@ -58,79 +50,46 @@ Selamat datang di dokumentasi lengkap untuk project **LaporIn** - Platform Lapor
    - Blockchain event structure
    - Privacy-first approach (GDPR-compliant)
 
----
-
-### 🔧 Troubleshooting
-
-6. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)**
-   - Masalah umum dan solusinya
-   - Database issues
-   - Backend issues
-   - Frontend issues
-   - AI issues
-   - Blockchain issues
-   - Debugging tips
+6. **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
+   - API reference lengkap
+   - Authentication endpoints
+   - Report endpoints
+   - Chat endpoints
+   - NLP endpoints
+   - Request/response examples
 
 ---
 
 ## 🎯 Quick Links
 
-### Untuk Developer Baru
-1. Baca [QUICK_START.md](./QUICK_START.md) untuk setup cepat
-2. Baca [SETUP_GUIDE.md](./SETUP_GUIDE.md) untuk setup lengkap
-3. Baca [TECH_STACK.md](./TECH_STACK.md) untuk memahami teknologi
+### Untuk Memahami LaporIn
+1. Baca [FEATURES.md](./FEATURES.md) untuk memahami semua fitur
+2. Baca [WORKFLOW.md](./WORKFLOW.md) untuk memahami alur kerja
+3. Baca [CHATBOT.md](./CHATBOT.md) untuk memahami chatbot AI
 
-### Untuk Setup Database
-1. Baca [SETUP_POSTGRESQL.md](./SETUP_POSTGRESQL.md)
-2. Ikuti langkah-langkah setup
-3. Run seed script: `npm run seed`
+### Untuk Developer
+1. Baca [TECH_STACK.md](./TECH_STACK.md) untuk memahami teknologi
+2. Baca [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) untuk API reference
+3. Explore source code di repository
 
-### Untuk Troubleshooting
-1. Baca [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
-2. Cek error message
-3. Ikuti solusi yang disarankan
-
-### Untuk Memahami Fitur
-1. Baca [FEATURES.md](./FEATURES.md)
-2. Explore aplikasi
-3. Test semua fitur
+### Untuk Memahami Blockchain Integration
+1. Baca [BIOMETRIC_BLOCKCHAIN.md](./BIOMETRIC_BLOCKCHAIN.md)
+2. Cek smart contract di `blockchain/contracts/`
+3. Cek blockchain service di `backend/services/blockchainService.js`
 
 ---
 
-## 📋 Dokumentasi Lainnya
-
-Di root project, ada dokumentasi tambahan:
-
-- **[README.md](../README.md)** - Overview project & quick start
-- **[API_DOCUMENTATION.md](../API_DOCUMENTATION.md)** - API reference lengkap
-- **[HACKATHON_ANALYSIS.md](../HACKATHON_ANALYSIS.md)** - Analisis kesesuaian dengan hackathon
-- **[PROJECT_STRUCTURE.md](../PROJECT_STRUCTURE.md)** - Struktur project
-
----
-
-## 🆘 Butuh Bantuan?
-
-Jika mengalami masalah:
-
-1. ✅ Cek [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
-2. ✅ Baca dokumentasi yang relevan
-3. ✅ Cek console logs (browser & backend)
-4. ✅ Report issue dengan detail error
-
----
-
-## 📝 Struktur Dokumentasi
+## 📋 Struktur Dokumentasi
 
 ```
 docs/
 ├── README.md                 # Index dokumentasi (file ini)
-├── QUICK_START.md            # Quick start guide
-├── SETUP_GUIDE.md            # Setup guide lengkap
-├── SETUP_POSTGRESQL.md       # Setup PostgreSQL detail
+├── FEATURES.md               # Daftar lengkap fitur
+├── WORKFLOW.md               # Alur kerja sistem
+├── CHATBOT.md                # Dokumentasi chatbot AI
 ├── TECH_STACK.md             # Tech stack documentation
-├── FEATURES.md               # Features documentation
 ├── BIOMETRIC_BLOCKCHAIN.md   # Biometric blockchain integration
-├── TROUBLESHOOTING.md        # Troubleshooting guide
+├── API_DOCUMENTATION.md      # API reference
 └── archive/                  # Dokumentasi historis/duplikat
 ```
 
@@ -139,21 +98,20 @@ docs/
 ## 🎓 Learning Path
 
 ### Beginner
-1. [QUICK_START.md](./QUICK_START.md) - Setup cepat
-2. [README.md](../README.md) - Overview project
-3. [FEATURES.md](./FEATURES.md) - Pahami fitur
+1. [FEATURES.md](./FEATURES.md) - Pahami fitur
+2. [WORKFLOW.md](./WORKFLOW.md) - Pahami alur kerja
+3. [CHATBOT.md](./CHATBOT.md) - Pahami chatbot
 
 ### Intermediate
-1. [SETUP_GUIDE.md](./SETUP_GUIDE.md) - Setup lengkap
-2. [TECH_STACK.md](./TECH_STACK.md) - Pahami teknologi
-3. [API_DOCUMENTATION.md](../API_DOCUMENTATION.md) - API reference
+1. [TECH_STACK.md](./TECH_STACK.md) - Pahami teknologi
+2. [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) - API reference
+3. Explore source code
 
 ### Advanced
-1. [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Debugging
-2. Explore source code
+1. [BIOMETRIC_BLOCKCHAIN.md](./BIOMETRIC_BLOCKCHAIN.md) - Blockchain integration
+2. Explore smart contracts
 3. Customize & extend features
 
 ---
 
 **Happy Coding! 🚀**
-
