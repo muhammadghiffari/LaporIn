@@ -22,7 +22,7 @@ import {
   Block as BlockIcon,
   FileDownload,
 } from '@mui/icons-material';
-import { DataGrid, GridColDef, GridActionsCellItem, GridToolbar } from '@mui/x-data-grid';
+import { DataGrid, GridColDef, GridActionsCellItem, GridToolbar, GridRenderCellParams, GridRowParams } from '@mui/x-data-grid';
 import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
 import { exportToExcel, formatReportsForExcel } from '@/lib/exportToExcel';
@@ -235,7 +235,7 @@ export default function LaporanPage() {
                 flex: 2,
                 minWidth: 200,
                 filterable: true,
-                renderCell: (params) => (
+                renderCell: (params: GridRenderCellParams<Laporan>) => (
                   <Box>
                     <Box sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {params.row.title}
@@ -257,7 +257,7 @@ export default function LaporanPage() {
                 headerName: 'Pelapor',
                 width: 180,
                 filterable: true,
-                renderCell: (params) => (
+                renderCell: (params: GridRenderCellParams<Laporan>) => (
                   <Box>
                     <Box sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {params.row.user_name || 'Tidak diketahui'}
@@ -275,9 +275,9 @@ export default function LaporanPage() {
                 headerName: 'Kategori',
                 width: 140,
                 filterable: true,
-                renderCell: (params) => (
+                renderCell: (params: GridRenderCellParams<Laporan>) => (
                   <Chip
-                    label={CATEGORY_LABELS[params.value] || params.value || 'Belum diproses'}
+                    label={CATEGORY_LABELS[params.value as string] || (params.value as string) || 'Belum diproses'}
                     size="small"
                   />
                 ),
@@ -289,9 +289,9 @@ export default function LaporanPage() {
                 type: 'singleSelect',
                 valueOptions: ['high', 'medium', 'low'],
                 filterable: true,
-                renderCell: (params) => {
-                  if (!params.value || !URGENCY_COLORS[params.value]) return null;
-                  const color = URGENCY_COLORS[params.value];
+                renderCell: (params: GridRenderCellParams<Laporan>) => {
+                  if (!params.value || !URGENCY_COLORS[params.value as string]) return null;
+                  const color = URGENCY_COLORS[params.value as string];
                   return (
                     <Chip
                       label={color.label}
@@ -312,9 +312,9 @@ export default function LaporanPage() {
                 type: 'singleSelect',
                 valueOptions: ['pending', 'in_progress', 'resolved', 'rejected', 'cancelled'],
                 filterable: true,
-                renderCell: (params) => {
-                  if (!params.value || !STATUS_COLORS[params.value]) return null;
-                  const color = STATUS_COLORS[params.value];
+                renderCell: (params: GridRenderCellParams<Laporan>) => {
+                  if (!params.value || !STATUS_COLORS[params.value as string]) return null;
+                  const color = STATUS_COLORS[params.value as string];
                   return (
                     <Chip
                       label={color.label}
@@ -333,7 +333,7 @@ export default function LaporanPage() {
                 headerName: 'Blockchain',
                 width: 160,
                 filterable: false,
-                renderCell: (params) => {
+                renderCell: (params: GridRenderCellParams<Laporan>) => {
                   if (!params.value) {
                     return (
                       <Typography variant="caption" sx={{ color: 'text.disabled' }}>
@@ -346,7 +346,7 @@ export default function LaporanPage() {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.disabled' }}>
                         <BlockIcon fontSize="small" />
                         <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                          {params.value.substring(0, 8)}...
+                          {(params.value as string).substring(0, 8)}...
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'text.disabled' }}>
                           (Mock)
@@ -363,7 +363,7 @@ export default function LaporanPage() {
                     >
                       <BlockIcon fontSize="small" />
                       <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                        {params.value.substring(0, 8)}...
+                        {(params.value as string).substring(0, 8)}...
                       </Typography>
                     </Link>
                   );
@@ -376,9 +376,9 @@ export default function LaporanPage() {
                 type: 'dateTime',
                 filterable: true,
                 valueGetter: (value) => value ? new Date(value) : null,
-                renderCell: (params) => {
+                renderCell: (params: GridRenderCellParams<Laporan>) => {
                   if (!params.value) return '-';
-                  const date = new Date(params.value);
+                  const date = new Date(params.value as string);
                   return (
                     <Box>
                       <Typography variant="caption" sx={{ display: 'block' }}>
@@ -400,7 +400,7 @@ export default function LaporanPage() {
                 type: 'actions',
                 headerName: 'Aksi',
                 width: 100,
-                getActions: (params) => [
+                getActions: (params: GridRowParams<Laporan>) => [
                   <GridActionsCellItem
                     icon={<Tooltip title="Lihat Detail"><VisibilityIcon /></Tooltip>}
                     label="Lihat Detail"
