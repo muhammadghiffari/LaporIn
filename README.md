@@ -2,6 +2,11 @@
 
 <div align="center">
 
+<!-- 
+  TODO: Tambahkan file gambar logo di assets/images/laporin-logo.png
+  Atau ganti URL di bawah dengan URL gambar logo Anda
+  Lihat assets/images/ADD_LOGO.md untuk instruksi lengkap
+-->
 ![LaporIn Logo](./assets/images/laporin-logo.png)
 
 **Platform civic tech untuk mengelola laporan warga di level RT/RW dengan integrasi AI untuk klasifikasi otomatis dan Blockchain untuk audit trail yang immutable.**
