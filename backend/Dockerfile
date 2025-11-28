@@ -1,5 +1,5 @@
 # Dockerfile untuk LaporIn Backend
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install dependencies untuk canvas dan native modules
 RUN apk add --no-cache \

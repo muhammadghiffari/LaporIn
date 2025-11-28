@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "LaporIn Backend API",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
