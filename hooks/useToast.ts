@@ -37,5 +37,3 @@ export function useToast() {
     info,
   };
 }
-
-//hooks

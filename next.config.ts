@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-// Cihuyy
 
 const nextConfig: NextConfig = {
   images: {
