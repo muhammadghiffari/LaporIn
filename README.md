@@ -2,6 +2,8 @@
 
 <div align="center">
 
+![LaporIn Logo](./assets/images/laporin-logo.png)
+
 **Platform civic tech untuk mengelola laporan warga di level RT/RW dengan integrasi AI untuk klasifikasi otomatis dan Blockchain untuk audit trail yang immutable.**
 
 > **🏅 Hackathon IT Fair XIV 2025**  
