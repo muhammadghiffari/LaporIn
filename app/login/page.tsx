@@ -8,6 +8,7 @@ import FaceCapture from '@/components/FaceCapture';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/Toast';
+import LaporInLogo from '@/components/LaporInLogo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -213,8 +214,8 @@ export default function LoginPage() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="max-w-md w-full space-y-6 sm:space-y-8 p-4 sm:p-6 md:p-8 bg-white rounded-2xl shadow-xl border border-gray-100 animate-fade-in mx-4" suppressHydrationWarning>
         <div className="text-center" suppressHydrationWarning>
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl mb-4 shadow-lg" suppressHydrationWarning>
-            <span className="text-white font-bold text-2xl">L</span>
+          <div className="flex justify-center mb-4" suppressHydrationWarning>
+            <LaporInLogo size={80} showText={false} />
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
             LaporIn

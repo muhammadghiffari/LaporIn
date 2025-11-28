@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
 import Layout from '@/components/Layout';
@@ -65,7 +65,7 @@ export default function WargaPage() {
   const isAdminRW = useMemo(() => user?.role === 'admin_rw', [user?.role]);
   const isKetuaRT = useMemo(() => user?.role === 'ketua_rt', [user?.role]);
   const isSekretaris = useMemo(() => ['sekretaris_rt', 'sekretaris'].includes(user?.role || ''), [user?.role]);
-  const allowedRoles = ['admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'];
+  const allowedRoles = useMemo(() => ['admin_rw', 'ketua_rt', 'sekretaris_rt', 'sekretaris'], []);
 
   useEffect(() => {
     setMounted(true);
@@ -98,8 +98,12 @@ export default function WargaPage() {
     fetchRtList();
   }, [mounted, isAdminRW]);
 
-  // Fetch data warga
+  // Fetch data warga - function biasa untuk avoid dependency issues
   const fetchWarga = async () => {
+    if (!mounted || !hasCheckedAuth || !isAuthenticated || !user || !allowedRoles.includes(user.role)) {
+      return;
+    }
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -143,23 +147,38 @@ export default function WargaPage() {
       });
     } catch (error: any) {
       console.error('Error fetching warga:', error);
+      setWarga([]); // Set empty array on error
+      setStats({
+        total: 0,
+        lakiLaki: 0,
+        perempuan: 0,
+        totalReports: 0,
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch warga when dependencies change (initial load and rtFilter change)
   useEffect(() => {
     if (mounted && hasCheckedAuth && isAuthenticated && user && allowedRoles.includes(user.role)) {
       fetchWarga();
     }
-  }, [mounted, hasCheckedAuth, isAuthenticated, user, allowedRoles, rtFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, hasCheckedAuth, isAuthenticated, user?.role, rtFilter]);
 
+  // Debounce search - separate effect untuk search
   useEffect(() => {
-    // Debounce search
+    if (!mounted || !hasCheckedAuth || !isAuthenticated || !user || !allowedRoles.includes(user.role)) {
+      return;
+    }
+    
     const timer = setTimeout(() => {
       fetchWarga();
     }, 500);
+    
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const columns: GridColDef[] = [

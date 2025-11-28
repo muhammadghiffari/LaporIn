@@ -1,8 +1,8 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/laporin_logo.dart';
 import '../auth/login_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 
@@ -148,44 +148,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo Container dengan design LaporIn
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00D4FF), // Light cyan/blue
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFF0099CC), // Darker blue outline
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF00D4FF).withOpacity(0.3),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Central horizontal element (stylized Q/eye)
-                          Container(
-                            width: 40,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          // Curved lines extending from center
-                          const CustomPaint(
-                            size: Size(120, 120),
-                            painter: _LogoPainter(),
-                          ),
-                        ],
-                      ),
+                    // Logo menggunakan reusable widget
+                    const LaporInLogo(
+                      size: 120,
+                      showText: false,
                     ),
                     const SizedBox(height: 32),
                     // LAPORIN Text
@@ -231,85 +197,5 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
   }
-}
-
-// Custom painter untuk logo design
-class _LogoPainter extends CustomPainter {
-  const _LogoPainter();
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = 20.0;
-
-    // Draw curved lines extending from center
-    // Top-left curve
-    final path1 = Path();
-    path1.moveTo(center.dx, center.dy);
-    path1.quadraticBezierTo(
-      center.dx - 15,
-      center.dy - 10,
-      center.dx - radius,
-      center.dy - radius,
-    );
-    canvas.drawPath(path1, paint);
-
-    // Top-right curve
-    final path2 = Path();
-    path2.moveTo(center.dx, center.dy);
-    path2.quadraticBezierTo(
-      center.dx + 15,
-      center.dy - 10,
-      center.dx + radius,
-      center.dy - radius,
-    );
-    canvas.drawPath(path2, paint);
-
-    // Bottom-left curve
-    final path3 = Path();
-    path3.moveTo(center.dx, center.dy);
-    path3.quadraticBezierTo(
-      center.dx - 15,
-      center.dy + 10,
-      center.dx - radius,
-      center.dy + radius,
-    );
-    canvas.drawPath(path3, paint);
-
-    // Bottom-right curve
-    final path4 = Path();
-    path4.moveTo(center.dx, center.dy);
-    path4.quadraticBezierTo(
-      center.dx + 15,
-      center.dy + 10,
-      center.dx + radius,
-      center.dy + radius,
-    );
-    canvas.drawPath(path4, paint);
-
-    // Draw small circles/spirals at the ends
-    _drawSpiral(canvas, Offset(center.dx - radius, center.dy - radius), paint);
-    _drawSpiral(canvas, Offset(center.dx + radius, center.dy - radius), paint);
-    _drawSpiral(canvas, Offset(center.dx - radius, center.dy + radius), paint);
-    _drawSpiral(canvas, Offset(center.dx + radius, center.dy + radius), paint);
-  }
-
-  void _drawSpiral(Canvas canvas, Offset center, Paint paint) {
-    // Draw a simple spiral using arcs
-    final spiralPath = Path();
-    for (int i = 0; i < 3; i++) {
-      final radius = 4.0 - (i * 1.2);
-      final rect = Rect.fromCircle(center: center, radius: radius);
-      spiralPath.addArc(rect, i * math.pi / 2, math.pi);
-    }
-    canvas.drawPath(spiralPath, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
