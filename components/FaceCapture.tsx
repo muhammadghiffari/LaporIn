@@ -186,8 +186,9 @@ export default function FaceCapture({
       setFaceDetected(true);
       setFaceCaptured(true); // Mark bahwa wajah sudah di-capture
       
-      // Stop video setelah capture berhasil
-      stopVideo();
+      // Jangan stop video setelah capture - biarkan kamera tetap hidup
+      // User bisa ambil ulang jika perlu
+      // stopVideo(); // REMOVED - keep camera alive
       
       // Call callback
       onFaceCaptured(descriptor);

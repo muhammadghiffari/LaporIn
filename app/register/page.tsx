@@ -51,7 +51,8 @@ export default function RegisterPage() {
   const handleFaceCaptured = (descriptor: number[]) => {
     setFaceDescriptor(descriptor);
     setFaceError('');
-    setShowFaceCapture(false);
+    // Jangan tutup kamera setelah capture - biarkan tetap hidup untuk ambil ulang jika perlu
+    // setShowFaceCapture(false); // REMOVED - keep camera visible
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,12 +218,27 @@ export default function RegisterPage() {
                 <p className="mt-2 text-xs text-red-600 font-medium">{faceError}</p>
               )}
               {faceDescriptor && (
-                <p className="mt-2 text-xs text-green-600 font-medium flex items-center gap-1">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Face descriptor berhasil direkam - Siap untuk registrasi
-                </p>
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Face descriptor berhasil direkam - Siap untuk registrasi
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFaceDescriptor(null);
+                      setFaceError('');
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 underline"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Ambil Ulang Wajah
+                  </button>
+                </div>
               )}
             </div>
           </div>
