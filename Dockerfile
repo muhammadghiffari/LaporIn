@@ -31,6 +31,10 @@ RUN npx prisma generate
 # Copy seluruh kode backend
 COPY backend .
 
+# Ensure models directory exists and verify model files
+RUN mkdir -p public/models && \
+    ls -la public/models/ || echo "Models directory created"
+
 # Create uploads directory
 RUN mkdir -p uploads/faces
 
