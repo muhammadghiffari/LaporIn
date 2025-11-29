@@ -342,127 +342,115 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Expanded(
             child: _messages.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.blue[400]!, Colors.purple[400]!],
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.blue[400]!, Colors.purple[400]!],
+                              ),
+                              shape: BoxShape.circle,
                             ),
-                            shape: BoxShape.circle,
+                            child: const Icon(Icons.smart_toy, size: 64, color: Colors.white),
                           ),
-                          child: const Icon(Icons.smart_toy, size: 64, color: Colors.white),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Mulai chat dengan AI',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Coba tanyakan: "Saya ingin melaporkan jalan rusak"',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey[400]
-                                : Colors.grey[600],
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Mulai chat dengan AI',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        // Quick Suggestions
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: _quickSuggestions.map((suggestion) {
-                            return ActionChip(
-                              label: Text(suggestion),
-                              onPressed: () {
-                                _messageController.text = suggestion;
-                                _sendMessage();
-                              },
-                              backgroundColor: Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.blue[900]!.withOpacity(0.3)
-                                  : Colors.blue[50],
-                              side: BorderSide(
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Text(
+                              'Coba tanyakan: "Saya ingin melaporkan jalan rusak"',
+                              style: TextStyle(
+                                fontSize: 14,
                                 color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.blue[700]!.withOpacity(0.5)
-                                    : Colors.blue[200]!,
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                               ),
-                              labelStyle: TextStyle(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.blue[200]
-                                    : Colors.blue[700],
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: _messages.length + (_isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
                       // Loading indicator
                       if (index == _messages.length) {
-                        return Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Colors.blue[400]!, Colors.purple[400]!],
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.smart_toy, size: 20, color: Colors.white),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.75,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.grey[800]
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
+                                    gradient: LinearGradient(
+                                      colors: [Colors.blue[500]!, Colors.purple[500]!],
+                                    ),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.smart_toy, size: 18, color: Colors.white),
+                                ),
+                                const SizedBox(width: 12),
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
                                       color: Theme.of(context).brightness == Brightness.dark
-                                          ? Colors.grey[700]!
-                                          : Colors.grey[200]!,
+                                          ? Colors.grey[800]
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Theme.of(context).brightness == Brightness.dark
+                                            ? Colors.grey[700]!
+                                            : Colors.grey[200]!,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Text(
+                                            'AI sedang menganalisis...',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Theme.of(context).brightness == Brightness.dark
+                                                  ? Colors.grey[300]
+                                                  : Colors.grey[700],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[600]!),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        'AI sedang menganalisis...',
-                                        style: TextStyle(
-                                          color: Theme.of(context).brightness == Brightness.dark
-                                              ? Colors.grey[300]
-                                              : Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       }
@@ -481,7 +469,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       final bubble = Align(
                         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                         child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                          margin: EdgeInsets.only(
+                            bottom: 12,
+                            left: isUser ? 16 : 0,
+                            right: isUser ? 0 : 16,
+                          ),
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.75,
                           ),
@@ -790,12 +782,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           // Pending Draft Card (fixed at bottom)
           if (_pendingReportDraft != null && _messages.isNotEmpty)
-            _buildDraftCard(_pendingReportDraft!),
-
-          // Quick Suggestions (jika belum ada pesan atau baru mulai)
-          if (_messages.length <= 1)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: _buildDraftCard(_pendingReportDraft!),
+            ),
+
+          // Quick Suggestions (jika belum ada pesan atau baru mulai, dan tidak sedang loading)
+          if (_messages.length <= 1 && !_isLoading)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[900]
+                    : Colors.grey[50],
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[800]!
+                        : Colors.grey[200]!,
+                    width: 1,
+                  ),
+                ),
+              ),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -818,7 +826,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       color: Theme.of(context).brightness == Brightness.dark
                           ? Colors.blue[200]
                           : Colors.blue[700],
+                      fontSize: 13,
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   );
                 }).toList(),
               ),
@@ -826,52 +836,97 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           // Input Area
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Theme.of(context).scaffoldBackgroundColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 5,
+                  color: Colors.black.withOpacity(0.05),
+                  spreadRadius: 0,
+                  blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
               ],
             ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.image, color: Colors.blue[600]),
-                  onPressed: _pickImage,
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Tulis pesan...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      filled: true,
-                      fillColor: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.grey[800]
-                          : Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.image, color: Colors.blue[600], size: 24),
+                      onPressed: _pickImage,
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(),
                     ),
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        decoration: InputDecoration(
+                          hintText: 'Tulis pesan...',
+                          hintStyle: TextStyle(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[500]
+                                : Colors.grey[400],
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[300]!,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey[700]!
+                                  : Colors.grey[300]!,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide(
+                              color: Colors.blue[600]!,
+                              width: 2,
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[800]
+                              : Colors.grey[50],
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        style: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[100]
+                              : Colors.black87,
+                        ),
+                        maxLines: 5,
+                        minLines: 1,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.blue[600],
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                        onPressed: _isLoading ? null : _sendMessage,
+                        padding: const EdgeInsets.all(12),
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: Colors.blue[600],
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: _isLoading ? null : _sendMessage,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
