@@ -406,7 +406,7 @@ router.post('/register', async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    console.log(`[Registration] ✅ User ${userBaru.email} (${userBaru.role}) registered with OTP verification`);
+    console.log(`[Registration] ✅ User ${userBaru.email} (${userBaru.role}) registered successfully`);
     
     res.json({ 
       token, 

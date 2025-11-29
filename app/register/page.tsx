@@ -14,6 +14,7 @@ import AppIcon from '@/app/assets/logo/icon.png';
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [rtRw, setRtRw] = useState('RT001/RW005');
   const [jenisKelamin, setJenisKelamin] = useState('');
@@ -44,6 +45,22 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     setFaceError('');
+    
+    // Validasi password
+    if (password.length < 6) {
+      const errorMsg = 'Password minimal 6 karakter';
+      setError(errorMsg);
+      showError(errorMsg);
+      return;
+    }
+    
+    // Validasi konfirmasi password
+    if (password !== confirmPassword) {
+      const errorMsg = 'Password dan konfirmasi password tidak sama';
+      setError(errorMsg);
+      showError(errorMsg);
+      return;
+    }
     
     // WAJIB face recognition untuk registrasi
     if (!faceDescriptor) {
@@ -143,6 +160,26 @@ export default function RegisterPage() {
               placeholder="Minimal 6 karakter"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Konfirmasi Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-gray-900 placeholder:text-gray-400"
+              placeholder="Ulangi password"
+              required
+            />
+            {confirmPassword && password !== confirmPassword && (
+              <p className="mt-1 text-xs text-red-600">Password tidak sama</p>
+            )}
+            {confirmPassword && password === confirmPassword && (
+              <p className="mt-1 text-xs text-green-600">✓ Password cocok</p>
+            )}
           </div>
 
           <div>
