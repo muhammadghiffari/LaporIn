@@ -184,6 +184,17 @@ function randomDate(start, end) {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 }
 
+// Helper function untuk generate tanggal dengan distribusi natural (lebih banyak di akhir periode)
+// Cocok untuk grafik yang menunjukkan growth/trend naik
+function naturalDate(start, end, index, total) {
+  // Distribusi eksponensial: lebih banyak data di akhir periode
+  // index: urutan data (0, 1, 2, ...)
+  // total: total data yang akan dibuat
+  const progress = index / total;
+  const exponential = Math.pow(progress, 0.7); // 0.7 membuat distribusi lebih natural (bisa di-adjust)
+  return new Date(start.getTime() + exponential * (end.getTime() - start.getTime()));
+}
+
 async function seed() {
   console.log('🌱 Memulai seeding dengan data real Jakarta...\n');
   console.log(`📍 Area center: ${AREA_CENTER_LAT}, ${AREA_CENTER_LNG}`);
@@ -386,8 +397,19 @@ async function seed() {
     jenisKelamin: 'laki_laki'
   };
   
+  // Hitung total warga dulu untuk distribusi waktu yang natural
+  let totalWargaCount = 0;
+  const rtRwWargaCounts = {};
   for (const [rtRw, locationData] of Object.entries(RT_RW_LOCATIONS)) {
     const numWarga = Math.floor(Math.random() * 6) + 10; // 10-15 warga per RT
+    rtRwWargaCounts[rtRw] = numWarga;
+    totalWargaCount += numWarga;
+  }
+  
+  let globalWargaIndex = 0; // Index global untuk distribusi waktu natural
+  
+  for (const [rtRw, locationData] of Object.entries(RT_RW_LOCATIONS)) {
+    const numWarga = rtRwWargaCounts[rtRw];
     const isFirstRT = rtRw === specialWarga.rtRw; // RT khusus pakai email dan data asli untuk warga pertama
     
     for (let i = 0; i < numWarga; i++) {
@@ -407,6 +429,10 @@ async function seed() {
       const displayName = isSpecialFirst ? `${specialWarga.name} (${rtRw})` : `${name} (${rtRw})`;
       const jenisKelamin = isSpecialFirst ? specialWarga.jenisKelamin : (isMale ? 'laki_laki' : 'perempuan');
       
+      // Gunakan naturalDate untuk distribusi waktu yang natural (lebih banyak di akhir periode)
+      // Ini akan membuat grafik lebih menarik dengan trend naik
+      const wargaCreatedAt = naturalDate(threeMonthsAgo, now, globalWargaIndex, totalWargaCount);
+      
       const warga = await prisma.user.upsert({
         where: { email },
         update: {
@@ -425,12 +451,13 @@ async function seed() {
           rtRw,
           jenisKelamin,
           isVerified: isSpecialFirst ? true : Math.random() > 0.3, // 70% verified, warga spesial pasti verified
-          createdAt: randomDate(threeMonthsAgo, now)
+          createdAt: wargaCreatedAt
         }
       });
       
       createdUsers[`warga_${rtRw}_${i}`] = warga;
       wargaIndex++;
+      globalWargaIndex++;
     }
     const emailNote = isFirstRT ? ' (email asli untuk warga pertama)' : '';
     console.log(`   ✅ ${rtRw}: ${numWarga} warga dibuat${emailNote}`);
@@ -451,6 +478,20 @@ async function seed() {
     let reportCount = 0;
     const statuses = ['pending', 'in_progress', 'resolved'];
     
+    // Hitung total laporan dulu untuk distribusi waktu yang natural
+    let totalReportsCount = 0;
+    const rtRwReportCounts = {};
+    for (const [rtRw, locationData] of Object.entries(RT_RW_LOCATIONS)) {
+      const wargasInRtRw = allWarga.filter(w => w.rtRw === rtRw);
+      if (wargasInRtRw.length > 0) {
+        const minReports = rtRw === 'RT001/RW001' ? 5 : Math.floor(Math.random() * 2) + 2;
+        rtRwReportCounts[rtRw] = minReports;
+        totalReportsCount += minReports;
+      }
+    }
+    
+    let globalReportIndex = 0; // Index global untuk distribusi waktu natural
+    
     // PRIORITAS: Pastikan setiap RT/RW punya minimal 2-3 laporan (terutama RT001/RW001)
     console.log('   Membuat minimal laporan per RT/RW...');
     
@@ -462,7 +503,7 @@ async function seed() {
       }
       
       // Minimal 2-3 laporan per RT/RW, lebih banyak untuk RT001/RW001 (untuk demo)
-      const minReports = rtRw === 'RT001/RW001' ? 5 : Math.floor(Math.random() * 2) + 2; // RT001/RW001: 5 laporan, lainnya: 2-3
+      const minReports = rtRwReportCounts[rtRw] || (rtRw === 'RT001/RW001' ? 5 : Math.floor(Math.random() * 2) + 2);
       
       for (let i = 0; i < minReports; i++) {
         const warga = wargasInRtRw[Math.floor(Math.random() * wargasInRtRw.length)];
@@ -475,10 +516,9 @@ async function seed() {
         const locationName = reportTemplate.locations[Math.floor(Math.random() * reportTemplate.locations.length)];
         const address = `${locationName}, ${locationData.address.split(', ')[1]}`;
         
-        // Generate tanggal
-        const daysAgo = Math.floor(Math.random() * 90);
-        const createdAt = new Date(now);
-        createdAt.setDate(createdAt.getDate() - daysAgo);
+        // Gunakan naturalDate untuk distribusi waktu yang natural (lebih banyak di akhir periode)
+        // Ini akan membuat grafik lebih menarik dengan trend naik
+        const reportCreatedAt = naturalDate(threeMonthsAgo, now, globalReportIndex, totalReportsCount);
         
         // Untuk RT001/RW001, pastikan ada laporan pending dan in_progress (untuk demo)
         let status;
@@ -502,8 +542,8 @@ async function seed() {
             urgency: reportTemplate.urgency,
             aiSummary: reportTemplate.description.substring(0, 200), // Dummy AI summary
             status,
-            createdAt,
-            updatedAt: createdAt
+            createdAt: reportCreatedAt,
+            updatedAt: reportCreatedAt
           }
         });
         
@@ -516,7 +556,7 @@ async function seed() {
             aiCategory: reportTemplate.category,
             aiUrgency: reportTemplate.urgency,
             processingTimeMs: Math.floor(Math.random() * 500) + 100, // 100-600ms
-            createdAt
+            createdAt: reportCreatedAt
           }
         });
         
@@ -526,13 +566,13 @@ async function seed() {
             reportId: report.id,
             status: 'pending',
             updatedBy: warga.id,
-            createdAt
+            createdAt: reportCreatedAt
           }
         });
         
         // Add additional status history if status is not pending
         if (status === 'in_progress') {
-          const inProgressDate = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 1 day later
+          const inProgressDate = new Date(reportCreatedAt.getTime() + 24 * 60 * 60 * 1000); // 1 day later
           await prisma.reportStatusHistory.create({
             data: {
               reportId: report.id,
@@ -542,8 +582,8 @@ async function seed() {
             }
           });
         } else if (status === 'resolved') {
-          const inProgressDate = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000);
-          const resolvedDate = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000);
+          const inProgressDate = new Date(reportCreatedAt.getTime() + 24 * 60 * 60 * 1000);
+          const resolvedDate = new Date(reportCreatedAt.getTime() + 48 * 60 * 60 * 1000);
           
           await prisma.reportStatusHistory.create({
             data: {
@@ -565,6 +605,7 @@ async function seed() {
         }
         
         reportCount++;
+        globalReportIndex++;
       }
       console.log(`   ✅ ${rtRw}: ${minReports} laporan dibuat (total: ${reportCount})`);
     }
