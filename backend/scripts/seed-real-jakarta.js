@@ -65,91 +65,91 @@ const NAMES_FEMALE = [
   'Oktavia Putri', 'Putri Indah', 'Rahma Aulia', 'Sinta Dewi', 'Tita Maharani'
 ];
 
-// Daftar laporan real dengan kategori dan lokasi
+// Daftar laporan real dengan kategori dan lokasi (semua di kawasan Cipete, Jakarta Selatan)
 const REAL_REPORTS = [
   {
-    title: 'Got Mampet di Jl. Kebon Jeruk',
+    title: 'Got Mampet di Jl. Cipete Raya',
     description: 'Selokan di depan rumah no 45 mampet karena sampah menumpuk. Air tidak bisa mengalir dan mulai bau tidak sedap.',
     category: 'infrastruktur',
     urgency: 'high',
-    locations: ['Jl. Kebon Jeruk', 'Pondok Pinang']
+    locations: ['Jl. Cipete Raya', 'Cipete']
   },
   {
     title: 'Lampu Jalan Mati',
-    description: 'Beberapa lampu jalan di sepanjang Jl. Kebon Jeruk mati total sejak kemarin malam, membuat area gelap dan rawan.',
+    description: 'Beberapa lampu jalan di sepanjang Jl. Cipete Raya mati total sejak kemarin malam, membuat area gelap dan rawan.',
     category: 'infrastruktur',
     urgency: 'medium',
-    locations: ['Jl. Kebon Jeruk', 'Pondok Pinang']
+    locations: ['Jl. Cipete Raya', 'Cipete']
   },
   {
     title: 'Sampah Menumpuk di TPS',
     description: 'Sampah di TPS depan komplek sudah menumpuk dan belum diangkut selama 3 hari. Menimbulkan bau tidak sedap dan mengganggu warga.',
     category: 'infrastruktur',
     urgency: 'high',
-    locations: ['TPS', 'Pondok Pinang']
+    locations: ['TPS', 'Cipete']
   },
   {
     title: 'Jalan Berlubang',
     description: 'Ada beberapa lubang di jalan depan gang, sudah cukup dalam dan membahayakan pengendara terutama saat malam hari.',
     category: 'infrastruktur',
     urgency: 'medium',
-    locations: ['Gang', 'Pondok Pinang']
+    locations: ['Gang', 'Cipete']
   },
   {
     title: 'Air PAM Tidak Mengalir',
     description: 'Sejak pagi tadi air PAM tidak mengalir sama sekali. Warga terpaksa menggunakan air sumur atau membeli air galon.',
     category: 'infrastruktur',
     urgency: 'high',
-    locations: ['Komplek', 'Pondok Pinang']
+    locations: ['Komplek', 'Cipete']
   },
   {
     title: 'Kebisingan dari Tempat Karaoke',
     description: 'Tempat karaoke di dekat komplek berisik sampai larut malam, mengganggu warga yang sedang istirahat.',
     category: 'sosial',
     urgency: 'medium',
-    locations: ['Jl. Ciputat Raya', 'Pondok Pinang']
+    locations: ['Jl. Pangeran Antasari', 'Cipete']
   },
   {
     title: 'Pohon Tumbang Menutup Jalan',
     description: 'Ada pohon besar tumbang menutup jalan gang setelah hujan deras kemarin. Perlu segera dibersihkan karena menghalangi akses warga.',
     category: 'infrastruktur',
     urgency: 'high',
-    locations: ['Gang', 'Pondok Pinang']
+    locations: ['Gang', 'Cipete']
   },
   {
     title: 'Gangguan Listrik Sebagian Blok',
     description: 'Listrik di blok C sering mati mendadak, terutama saat hujan. Perlu dicek instalasi listriknya.',
     category: 'infrastruktur',
     urgency: 'high',
-    locations: ['Blok C', 'Pondok Pinang']
+    locations: ['Blok C', 'Cipete']
   },
   {
     title: 'Saluran Air Bocor',
     description: 'Ada saluran air yang bocor di dekat tiang listrik, airnya menggenang dan mulai meresap ke jalan.',
     category: 'infrastruktur',
     urgency: 'medium',
-    locations: ['Jl. Pasar Minggu', 'Pondok Pinang']
+    locations: ['Jl. Cipete Raya', 'Cipete']
   },
   {
     title: 'Parkir Liar di Sisi Jalan',
     description: 'Banyak kendaraan parkir liar di sisi jalan, menyempitkan jalan dan mengganggu lalu lintas terutama saat jam sibuk.',
     category: 'sosial',
     urgency: 'low',
-    locations: ['Jl. Ciputat Raya', 'Pondok Pinang']
+    locations: ['Jl. Pangeran Antasari', 'Cipete']
   },
   {
     title: 'TPS Tidak Terurus',
     description: 'TPS di ujung gang sudah penuh dan sampah berserakan. Perlu koordinasi dengan petugas kebersihan untuk pengangkutan rutin.',
     category: 'infrastruktur',
     urgency: 'medium',
-    locations: ['TPS', 'Gang', 'Pondok Pinang']
+    locations: ['TPS', 'Gang', 'Cipete']
   },
   {
     title: 'Warga Meninggal Butuh Bantuan',
     description: 'Ada warga yang meninggal dunia, keluarga membutuhkan bantuan untuk biaya pemakaman dan dukungan moral.',
     category: 'sosial',
     urgency: 'high',
-    locations: ['Komplek', 'Pondok Pinang']
+    locations: ['Komplek', 'Cipete']
   }
 ];
 
@@ -244,22 +244,33 @@ async function seed() {
     const avgLng = rtCenters.reduce((sum, c) => sum + c.lng, 0) / rtCenters.length;
     
     // Hitung radius RW (jarak terjauh dari center RW ke edge RT terjauh + buffer)
+    // Pastikan radius RW lebih besar dari radius RT manapun
     let maxDistance = 0;
+    let maxRtRadius = 0;
     for (let i = 0; i < rtCenters.length; i++) {
       const rtCenter = rtCenters[i];
       const rtRadius = rtRadii[i];
-      // Jarak dari center RW ke center RT
+      if (rtRadius > maxRtRadius) {
+        maxRtRadius = rtRadius;
+      }
+      // Jarak dari center RW ke center RT (dalam meter)
       const latDiff = rtCenter.lat - avgLat;
       const lngDiff = rtCenter.lng - avgLng;
-      const distanceToCenter = Math.sqrt(latDiff * latDiff * 111320 * 111320 + lngDiff * lngDiff * 111320 * 111320 * Math.cos(avgLat * Math.PI / 180) * Math.cos(avgLat * Math.PI / 180));
-      // Jarak ke edge RT (center to RT center + RT radius)
+      // Konversi derajat ke meter (1 derajat lat ≈ 111320m, 1 derajat lng ≈ 111320m * cos(lat))
+      const latDiffMeters = latDiff * 111320;
+      const lngDiffMeters = lngDiff * 111320 * Math.cos(avgLat * Math.PI / 180);
+      const distanceToCenter = Math.sqrt(latDiffMeters * latDiffMeters + lngDiffMeters * lngDiffMeters);
+      // Jarak ke edge RT (center RW to RT center + RT radius)
       const distanceToEdge = distanceToCenter + rtRadius;
       if (distanceToEdge > maxDistance) {
         maxDistance = distanceToEdge;
       }
     }
-    // Tambah buffer 100m untuk memastikan semua RT tertutup
-    const rwRadius = Math.ceil(maxDistance + 100);
+    // Tambah buffer 150m untuk memastikan semua RT tertutup dengan aman
+    // Pastikan radius RW minimal 1.5x dari radius RT terbesar
+    const minRwRadius = Math.ceil(maxRtRadius * 1.5);
+    const calculatedRwRadius = Math.ceil(maxDistance + 150);
+    const rwRadius = Math.max(minRwRadius, calculatedRwRadius);
     
     rwLocations[rw] = {
       center: { lat: avgLat, lng: avgLng },
@@ -267,6 +278,9 @@ async function seed() {
     };
     
     console.log(`   📍 ${rw}: Center (${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}), Radius: ${rwRadius}m (menaungi ${rtsInRw.length} RT)`);
+    console.log(`      - RT radius maksimal: ${maxRtRadius}m`);
+    console.log(`      - RW radius: ${rwRadius}m (${rwRadius > maxRtRadius ? '✓' : '✗'} lebih besar dari RT)`);
+    console.log(`      - Semua RT berada di kawasan Cipete, Jakarta Selatan`);
   }
   
   for (let rwIndex = 0; rwIndex < rwNumbers.length; rwIndex++) {
