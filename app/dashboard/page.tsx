@@ -876,14 +876,14 @@ export default function DashboardPage() {
                         Gunakan filter di atas untuk melihat statistik per RW atau per RT.
                       </p>
                       {!rwFilter && (
-                        <div className="mt-3 pt-3 border-t border-purple-200">
-                          <p className="text-xs text-purple-600 font-medium mb-1">Best Practice Filter:</p>
-                          <ul className="text-xs text-purple-600 space-y-1 list-disc list-inside">
-                            <li>Pilih <strong>RW</strong> terlebih dahulu untuk melihat statistik semua RT dalam RW tersebut</li>
-                            <li>Setelah memilih RW, pilih <strong>RT</strong> untuk melihat statistik spesifik RT tersebut</li>
-                            <li>Biarkan kosong untuk melihat statistik semua RW/RT dalam sistem</li>
-                          </ul>
-                        </div>
+                      <div className="mt-3 pt-3 border-t border-purple-200">
+                        <p className="text-xs text-purple-600 font-medium mb-1">Best Practice Filter:</p>
+                        <ul className="text-xs text-purple-600 space-y-1 list-disc list-inside">
+                          <li>Pilih <strong>RW</strong> terlebih dahulu untuk melihat statistik semua RT dalam RW tersebut</li>
+                          <li>Setelah memilih RW, pilih <strong>RT</strong> untuk melihat statistik spesifik RT tersebut</li>
+                          <li>Biarkan kosong untuk melihat statistik semua RW/RT dalam sistem</li>
+                        </ul>
+                      </div>
                       )}
                     </div>
                   </div>
@@ -935,20 +935,20 @@ export default function DashboardPage() {
                           </div>
                         </div>
                       )}
-                      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
-                        <Building2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <h3 className="font-semibold text-blue-900 mb-2">Data {getRtRwLabel()} Anda</h3>
-                          <p className="text-sm text-blue-700">
-                            Statistik dan laporan dari semua RT dalam {getRtRwLabel()} Anda. Gunakan dropdown di atas untuk melihat statistik per RT.
-                          </p>
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                      <Building2 className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h3 className="font-semibold text-blue-900 mb-2">Data {getRtRwLabel()} Anda</h3>
+                        <p className="text-sm text-blue-700">
+                          Statistik dan laporan dari semua RT dalam {getRtRwLabel()} Anda. Gunakan dropdown di atas untuk melihat statistik per RT.
+                        </p>
                           {rtStats && rtStats.rtStats && (
                             <p className="text-xs text-blue-600 mt-2">
                               Total RT yang dinaungi: <strong>{rtStats.rtStats.length}</strong>
                             </p>
                           )}
-                        </div>
                       </div>
+                    </div>
                     </>
                   )}
                   {isKetuaRT && (
