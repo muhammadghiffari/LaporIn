@@ -831,18 +831,22 @@ const fitMapToBoundary = useCallback((boundary: RTRwBoundary, mapInstance?: goog
         ],
       };
 
-      // Gunakan boundary RT/RW jika ada, kalau tidak pakai batas global Cipete
-      const effectiveBounds = boundaryRestriction || CIPETE_BOUNDS;
-      if (effectiveBounds) {
-        options.restriction = {
-          latLngBounds: effectiveBounds,
-          strictBounds: true,
-        };
-        if (restrictedZoomRange) {
-          options.minZoom = restrictedZoomRange.minZoom;
-          options.maxZoom = restrictedZoomRange.maxZoom;
+      // Untuk superadmin, tidak ada batasan peta (bebas zoom dan pan ke mana saja)
+      // Untuk role lain, gunakan boundary RT/RW jika ada, kalau tidak pakai batas global Cipete
+      if (!isSuperAdmin) {
+        const effectiveBounds = boundaryRestriction || CIPETE_BOUNDS;
+        if (effectiveBounds) {
+          options.restriction = {
+            latLngBounds: effectiveBounds,
+            strictBounds: true,
+          };
+          if (restrictedZoomRange) {
+            options.minZoom = restrictedZoomRange.minZoom;
+            options.maxZoom = restrictedZoomRange.maxZoom;
+          }
         }
       }
+      // Superadmin: tidak ada restriction, bebas zoom dan pan
       return options;
     }, [boundaryRestriction, restrictedZoomRange]);
 
