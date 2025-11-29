@@ -336,55 +336,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
         ),
       ),
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? Colors.grey[900]
+          : Colors.grey[50],
       body: Column(
         children: [
           // Messages List
           Expanded(
-            child: _messages.isEmpty
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Colors.blue[400]!, Colors.purple[400]!],
+            child: Container(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[900]
+                  : Colors.grey[50],
+              child: _messages.isEmpty
+                  ? Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.blue[400]!, Colors.purple[400]!],
+                                ),
+                                shape: BoxShape.circle,
                               ),
-                              shape: BoxShape.circle,
+                              child: const Icon(Icons.smart_toy, size: 64, color: Colors.white),
                             ),
-                            child: const Icon(Icons.smart_toy, size: 64, color: Colors.white),
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Mulai chat dengan AI',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            child: Text(
-                              'Coba tanyakan: "Saya ingin melaporkan jalan rusak"',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.grey[400]
-                                    : Colors.grey[600],
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Mulai chat dengan AI',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                'Coba tanyakan: "Saya ingin melaporkan jalan rusak"',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600],
+                                ),
+                                textAlign: TextAlign.center,
                               ),
-                              textAlign: TextAlign.center,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _messages.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _messages.length + (_isLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
                       // Loading indicator
                       if (index == _messages.length) {
                         return Align(
@@ -778,6 +785,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       return bubble;
                     },
                   ),
+            ),
           ),
 
           // Pending Draft Card (fixed at bottom)
