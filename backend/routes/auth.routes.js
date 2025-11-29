@@ -319,33 +319,19 @@ router.post('/users', async (req, res) => {
   }
 });
 
-// Registrasi user baru (WAJIB dengan OTP email verification)
+// Registrasi user baru (tanpa OTP untuk demo)
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role, rt_rw, jenis_kelamin, faceDescriptor, verificationCode } = req.body;
+    const { email, password, name, role, rt_rw, jenis_kelamin, faceDescriptor } = req.body;
     
     // Validasi input wajib
     if (!email || !password || !name || !role) {
       return res.status(400).json({ error: 'Email, password, name, dan role wajib diisi' });
     }
     
-    // WAJIB verifikasi OTP email sebelum registrasi
-    if (!verificationCode) {
-      return res.status(400).json({ 
-        error: 'Kode verifikasi email wajib diisi. Silakan minta kode verifikasi terlebih dahulu.',
-        requiresVerification: true
-      });
-    }
-    
-    // Verify OTP code
-    const { verifyCode } = require('../services/emailVerificationService');
-    const otpResult = await verifyCode(email, verificationCode, 'registration');
-    
-    if (!otpResult.success) {
-      return res.status(400).json({ 
-        error: otpResult.error || 'Kode verifikasi tidak valid atau sudah kedaluwarsa',
-        requiresVerification: true
-      });
+    // Validasi password minimal 6 karakter
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password minimal 6 karakter' });
     }
     
     // Cek apakah email sudah terdaftar
