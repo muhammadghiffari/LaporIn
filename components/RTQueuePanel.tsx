@@ -238,11 +238,10 @@ export default function RTQueuePanel() {
           if (params.row.status === 'pending') {
             actions.push(
               <GridActionsCellItem
-                icon={<Tooltip title="Mulai Proses"><PlayArrow /></Tooltip>}
+                icon={<Tooltip title="Mulai Proses"><PlayArrow sx={{ color: '#3B82F6' }} /></Tooltip>}
                 label="Mulai Proses"
                 onClick={() => updateStatus(params.row.id, 'in_progress')}
                 showInMenu={false}
-                sx={{ color: '#3B82F6' }}
               />
             );
           }
@@ -250,11 +249,10 @@ export default function RTQueuePanel() {
           if (params.row.status !== 'resolved') {
             actions.push(
               <GridActionsCellItem
-                icon={<Tooltip title="Selesaikan"><CheckCircle /></Tooltip>}
+                icon={<Tooltip title="Selesaikan"><CheckCircle sx={{ color: '#10B981' }} /></Tooltip>}
                 label="Selesaikan"
                 onClick={() => updateStatus(params.row.id, 'resolved')}
                 showInMenu={false}
-                sx={{ color: '#10B981' }}
               />
             );
           }

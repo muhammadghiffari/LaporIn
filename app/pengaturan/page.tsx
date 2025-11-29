@@ -116,13 +116,8 @@ export default function PengaturanPage() {
         setShowFaceCapture(false);
         setFaceDescriptor(null);
         
-        // Update user state
-        useAuthStore.setState({
-          user: {
-            ...user!,
-            face_verified: true
-          }
-        });
+        // Update user state - reload user data instead of manual update
+        await loadFaceStatus();
         
         setTimeout(() => setFaceSuccess(''), 5000);
       }

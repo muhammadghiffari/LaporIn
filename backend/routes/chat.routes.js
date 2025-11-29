@@ -555,11 +555,17 @@ ${roleUser === 'warga' ? '- Hanya buat draft laporan jika informasi SUDAH LENGKA
       const aiIntent = await detectIntentWithAI(pesanUserTerakhir, contextMessages);
       if (aiIntent && aiIntent.confidence > 0.7) {
         intent = aiIntent;
-        console.log('🤖 AI NLP Intent:', intent);
+        // Hanya log di development mode untuk mengurangi noise
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🤖 AI NLP Intent:', intent);
+        }
       } else {
         // Fallback ke keyword-based
         intent = detectIntent(pesanUserTerakhir);
-        console.log('🔍 Keyword-based Intent:', intent);
+        // Hanya log di development mode
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 Keyword-based Intent:', intent);
+        }
       }
     } catch (error) {
       console.error('⚠️ AI NLP error, using keyword fallback:', error.message);

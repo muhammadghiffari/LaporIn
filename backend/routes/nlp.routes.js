@@ -78,10 +78,21 @@ const INTENTS = [
   { intent: 'ASK_FAQ', keywords: ['cara', 'bagaimana', 'apa itu', 'kenapa', 'faq', 'pending', 'fungsinya'] },
 ];
 
+// Simple cache untuk intent detection (5 menit TTL)
+const intentCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 menit
+
 // NLP dengan Groq AI untuk semantic understanding
 async function detectIntentWithAI(text, context = '') {
   if (!groq) {
     return null; // Fallback ke keyword-based
+  }
+  
+  // Check cache dulu
+  const cacheKey = `${text.toLowerCase().trim()}_${context.slice(0, 50)}`;
+  const cached = intentCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.result;
   }
   
   try {
@@ -141,7 +152,17 @@ Return HANYA JSON:
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0]);
-      console.log('🤖 AI NLP Intent Detection:', result);
+      // Cache hasil
+      intentCache.set(cacheKey, { result, timestamp: Date.now() });
+      // Cleanup cache lama (hapus entry yang lebih dari 10 menit)
+      if (intentCache.size > 100) {
+        const now = Date.now();
+        for (const [key, value] of intentCache.entries()) {
+          if (now - value.timestamp > CACHE_TTL * 2) {
+            intentCache.delete(key);
+          }
+        }
+      }
       return result;
     }
   } catch (error) {

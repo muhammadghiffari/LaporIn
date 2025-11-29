@@ -319,38 +319,75 @@ router.post('/users', async (req, res) => {
   }
 });
 
-// Registrasi user baru (WAJIB dengan face descriptor)
+// Registrasi user baru (WAJIB dengan OTP email verification)
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name, role, rt_rw, jenis_kelamin, faceDescriptor } = req.body;
+    const { email, password, name, role, rt_rw, jenis_kelamin, faceDescriptor, verificationCode } = req.body;
     
-    // WAJIB face descriptor untuk registrasi
-    if (!faceDescriptor) {
-      return res.status(400).json({ error: 'Face descriptor is required for registration' });
+    // Validasi input wajib
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ error: 'Email, password, name, dan role wajib diisi' });
+    }
+    
+    // WAJIB verifikasi OTP email sebelum registrasi
+    if (!verificationCode) {
+      return res.status(400).json({ 
+        error: 'Kode verifikasi email wajib diisi. Silakan minta kode verifikasi terlebih dahulu.',
+        requiresVerification: true
+      });
+    }
+    
+    // Verify OTP code
+    const { verifyCode } = require('../services/emailVerificationService');
+    const otpResult = await verifyCode(email, verificationCode, 'registration');
+    
+    if (!otpResult.success) {
+      return res.status(400).json({ 
+        error: otpResult.error || 'Kode verifikasi tidak valid atau sudah kedaluwarsa',
+        requiresVerification: true
+      });
+    }
+    
+    // Cek apakah email sudah terdaftar
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true }
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email sudah terdaftar' });
     }
     
     // Hash password
     const hashPassword = await bcrypt.hash(password, 10);
     
-    // Validate dan encrypt face descriptor (WAJIB)
-    if (!validateFaceDescriptor(faceDescriptor)) {
-      return res.status(400).json({ error: 'Invalid face descriptor format' });
-    }
-    const encryptedFaceDescriptor = encryptFaceDescriptor(faceDescriptor);
+    // Prepare user data
+    const userData = {
+      email,
+      passwordHash: hashPassword,
+      name,
+      role,
+      rtRw: rt_rw || null,
+      jenisKelamin: jenis_kelamin || null,
+      isVerified: false, // Warga perlu diverifikasi oleh admin RT/RW
+      // Face descriptor optional (bisa ditambahkan nanti)
+      faceDescriptor: null,
+      faceVerified: false
+    };
     
-    // Buat user baru (dengan face descriptor wajib)
+    // Jika ada face descriptor, validate dan encrypt
+    if (faceDescriptor) {
+      if (!validateFaceDescriptor(faceDescriptor)) {
+        return res.status(400).json({ error: 'Invalid face descriptor format' });
+      }
+      userData.faceDescriptor = encryptFaceDescriptor(faceDescriptor);
+      userData.faceVerified = true;
+      userData.faceVerifiedAt = new Date();
+    }
+    
+    // Buat user baru
     const userBaru = await prisma.user.create({
-      data: {
-        email,
-        passwordHash: hashPassword,
-        name,
-        role,
-        rtRw: rt_rw || null,
-        jenisKelamin: jenis_kelamin || null,
-        faceDescriptor: encryptedFaceDescriptor, // Wajib ada
-        faceVerified: true, // Auto verified saat registrasi
-        faceVerifiedAt: new Date()
-      },
+      data: userData,
       select: {
         id: true,
         email: true,
@@ -358,7 +395,8 @@ router.post('/register', async (req, res) => {
         role: true,
         rtRw: true,
         jenisKelamin: true,
-        faceVerified: true
+        faceVerified: true,
+        isVerified: true
       }
     });
     
@@ -367,6 +405,8 @@ router.post('/register', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
+    
+    console.log(`[Registration] ✅ User ${userBaru.email} (${userBaru.role}) registered with OTP verification`);
     
     res.json({ 
       token, 
@@ -377,12 +417,17 @@ router.post('/register', async (req, res) => {
         role: userBaru.role,
         rt_rw: userBaru.rtRw,
         jenis_kelamin: userBaru.jenisKelamin,
-        face_verified: userBaru.faceVerified
+        face_verified: userBaru.faceVerified,
+        is_verified: userBaru.isVerified
       },
-      faceRegistered: !!encryptedFaceDescriptor
+      faceRegistered: !!userData.faceDescriptor,
+      message: userBaru.role === 'warga' 
+        ? 'Registrasi berhasil! Akun Anda akan diverifikasi oleh Admin RT/RW sebelum dapat digunakan.'
+        : 'Registrasi berhasil!'
     });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('[Registration] Error:', error);
+    res.status(400).json({ error: error.message || 'Gagal melakukan registrasi' });
   }
 });
 

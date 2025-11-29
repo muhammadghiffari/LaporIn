@@ -138,19 +138,24 @@ export default function AnalyticsPage() {
     fetchRtStats();
   }, [mounted, isAdminRW]);
 
-  // Fetch ringkasan RW untuk Super Admin
+  // Fetch ringkasan RW untuk Super Admin dengan debouncing
   useEffect(() => {
     if (!mounted || !isSuperAdmin || !rwFilter) return;
     
-    const fetchRwSummary = async () => {
-      try {
-        const { data } = await api.get(`/reports/stats/rw-summary?rwFilter=${rwFilter}`);
-        setRwSummary(data);
-      } catch (e: any) {
-        console.error('Error fetching RW summary:', e);
-      }
-    };
-    fetchRwSummary();
+    // Debounce untuk menghindari terlalu banyak request
+    const timeoutId = setTimeout(() => {
+      const fetchRwSummary = async () => {
+        try {
+          const { data } = await api.get(`/reports/stats/rw-summary?rwFilter=${rwFilter}`);
+          setRwSummary(data);
+        } catch (e: any) {
+          console.error('Error fetching RW summary:', e);
+        }
+      };
+      fetchRwSummary();
+    }, 300); // 300ms debounce
+    
+    return () => clearTimeout(timeoutId);
   }, [mounted, isSuperAdmin, rwFilter]);
 
   useEffect(() => {

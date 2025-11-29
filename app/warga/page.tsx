@@ -18,7 +18,6 @@ import {
   InputLabel,
   Card,
   CardContent,
-  Grid,
   CircularProgress,
   Alert,
 } from '@mui/material';
@@ -319,8 +318,8 @@ export default function WargaPage() {
         </Box>
 
         {/* Stats Cards */}
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
+          <Box>
             <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -336,59 +335,53 @@ export default function WargaPage() {
                 </Box>
               </CardContent>
             </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Laki-laki
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="info.main">
-                      {stats.lakiLaki}
-                    </Typography>
-                  </Box>
-                  <Person sx={{ fontSize: 40, color: 'info.main', opacity: 0.3 }} />
+          </Box>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Laki-laki
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="info.main">
+                    {stats.lakiLaki}
+                  </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Perempuan
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="secondary.main">
-                      {stats.perempuan}
-                    </Typography>
-                  </Box>
-                  <Person sx={{ fontSize: 40, color: 'secondary.main', opacity: 0.3 }} />
+                <Person sx={{ fontSize: 40, color: 'info.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Perempuan
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="secondary.main">
+                    {stats.perempuan}
+                  </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total Laporan
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="success.main">
-                      {stats.totalReports}
-                    </Typography>
-                  </Box>
-                  <FilterList sx={{ fontSize: 40, color: 'success.main', opacity: 0.3 }} />
+                <Person sx={{ fontSize: 40, color: 'secondary.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Total Laporan
+                  </Typography>
+                  <Typography variant="h4" fontWeight={700} color="success.main">
+                    {stats.totalReports}
+                  </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+                <FilterList sx={{ fontSize: 40, color: 'success.main', opacity: 0.3 }} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
 
         {/* Filters */}
         <Paper sx={{ p: 3, mb: 3 }}>

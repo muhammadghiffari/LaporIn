@@ -13,6 +13,7 @@
     "seed": "node scripts/seed.js",
     "seed:location": "node scripts/seed-with-location.js",
     "seed:real": "node scripts/seed-real-jakarta.js",
+    "seed:admin-kelurahan": "node scripts/seed-admin-kelurahan.js",
     "clear-seeder": "node scripts/clear-seeder-data.js",
     "clear-all": "node scripts/clear-all-data-except-chatbot.js",
     "clear-and-reseed": "node scripts/clear-and-reseed.js",

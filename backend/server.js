@@ -102,6 +102,20 @@ const HOST = process.env.HOST || '0.0.0.0'; // Listen di semua interface untuk a
 server.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
   console.log(`📡 Socket.io ready for real-time updates`);
-  console.log(`📱 Mobile app dapat mengakses: http://192.168.20.39:${PORT}/api`);
+  // Get local IP address for mobile app access
+  const os = require('os');
+  const networkInterfaces = os.networkInterfaces();
+  let localIP = 'localhost';
+  for (const interfaceName in networkInterfaces) {
+    const interfaces = networkInterfaces[interfaceName];
+    for (const iface of interfaces) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        localIP = iface.address;
+        break;
+      }
+    }
+    if (localIP !== 'localhost') break;
+  }
+  console.log(`📱 Mobile app dapat mengakses: http://${localIP}:${PORT}/api`);
 });
 

@@ -1,10 +1,10 @@
 class ApiConfig {
-  // ANDROID ONLY - Update dengan URL backend Anda
+  // Production API URL (Railway)
+  // Untuk development lokal, gunakan: http://10.90.229.46:3001/api
   // Untuk Android Emulator: http://10.0.2.2:3001/api
-  // Untuk Device Fisik: http://192.168.20.39:3001/api (IP laptop WiFi)
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.20.39:3001/api', // IP laptop WiFi untuk device fisik
+    defaultValue: 'https://api-laporin.up.railway.app/api', // Railway production URL
   );
   
   // Endpoints

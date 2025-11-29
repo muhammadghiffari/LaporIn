@@ -1390,7 +1390,10 @@ router.get('/stats/rw-list', authenticate, async (req, res) => {
         // Filter RT000 atau RT yang tidak valid (RT dengan angka 0 setelah RT)
         const rtNumber = parseInt(rtPart.replace(/RT/i, '').replace(/^0+/, '')) || 0;
         if (rtNumber === 0) {
-          console.log(`[RW Summary] ${rwNormalized}: Filtering out invalid RT: ${rtPart}`);
+          // Hanya log di development mode
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[RW Summary] ${rwNormalized}: Filtering out invalid RT: ${rtPart}`);
+          }
           return null; // Filter RT000 atau RT yang tidak valid
         }
         return rtPart || null;
@@ -1401,7 +1404,10 @@ router.get('/stats/rw-list', authenticate, async (req, res) => {
         return numA - numB;
       });
       
-      console.log(`[RW Summary] ${rwNormalized}: Found ${uniqueRTs.length} RT(s):`, uniqueRTs);
+      // Hanya log di development mode untuk mengurangi noise
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[RW Summary] ${rwNormalized}: Found ${uniqueRTs.length} RT(s):`, uniqueRTs);
+      }
       
       // Count total warga di RW dengan exact match
       const totalWarga = await prisma.user.count({
@@ -1426,7 +1432,10 @@ router.get('/stats/rw-list', authenticate, async (req, res) => {
         }
       });
       
-      console.log(`[RW Summary] ${rwNormalized}: ${totalWarga} warga, ${totalReports} laporan`);
+      // Hanya log di development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[RW Summary] ${rwNormalized}: ${totalWarga} warga, ${totalReports} laporan`);
+      }
       
       return {
         rw: rwNormalized,
@@ -1935,12 +1944,15 @@ router.get('/stats/rw-summary', authenticate, async (req, res) => {
       const rwPart = parts[1]?.trim();
       // Verify RW matches
       if (rwPart?.toUpperCase() !== rwNormalized) return null;
-      // Filter RT000 atau RT yang tidak valid (RT dengan angka 0 setelah RT)
-      const rtNumber = parseInt(rtPart.replace(/RT/i, '').replace(/^0+/, '')) || 0;
-      if (rtNumber === 0) {
-        console.log(`[RW Summary] ${rwNormalized}: Filtering out invalid RT: ${rtPart}`);
-        return null; // Filter RT000 atau RT yang tidak valid
-      }
+        // Filter RT000 atau RT yang tidak valid (RT dengan angka 0 setelah RT)
+        const rtNumber = parseInt(rtPart.replace(/RT/i, '').replace(/^0+/, '')) || 0;
+        if (rtNumber === 0) {
+          // Hanya log di development mode
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[RW Summary] ${rwNormalized}: Filtering out invalid RT: ${rtPart}`);
+          }
+          return null; // Filter RT000 atau RT yang tidak valid
+        }
       return rtPart || null;
     }).filter(Boolean))].sort((a, b) => {
       const numA = parseInt(a.replace(/RT/i, '').replace(/^0+/, '')) || 0;
