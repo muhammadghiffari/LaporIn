@@ -16,8 +16,9 @@ export const initSocket = (token: string): Socket => {
   
   const socketUrl = apiUrl || 'http://localhost:3001';
   
-  // Log untuk debugging (hanya di development)
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // Log untuk debugging (selalu muncul untuk troubleshooting)
+  if (typeof window !== 'undefined') {
+    console.log('[Socket Config] NEXT_PUBLIC_API_URL:', apiUrl || 'NOT SET');
     console.log('[Socket Config] Connecting to:', socketUrl);
   }
   

@@ -4,18 +4,23 @@ import axios from 'axios';
 const getApiBaseUrl = () => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   
-  // Log untuk debugging (hanya di development)
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-    console.log('[API Config] NEXT_PUBLIC_API_URL:', apiUrl || 'NOT SET - using localhost fallback');
+  // Log untuk debugging (selalu muncul untuk troubleshooting)
+  if (typeof window !== 'undefined') {
+    console.log('[API Config] NEXT_PUBLIC_API_URL:', apiUrl || 'NOT SET');
+    console.log('[API Config] NODE_ENV:', process.env.NODE_ENV);
   }
   
   if (apiUrl) {
     // Remove trailing slash jika ada
     const cleanUrl = apiUrl.replace(/\/$/, '');
-    return `${cleanUrl}/api`;
+    const finalUrl = `${cleanUrl}/api`;
+    if (typeof window !== 'undefined') {
+      console.log('[API Config] Using API URL:', finalUrl);
+    }
+    return finalUrl;
   }
   
-  // Fallback ke localhost hanya untuk development
+  // Fallback ke localhost hanya untuk development lokal
   if (typeof window !== 'undefined') {
     console.warn('[API Config] ⚠️ NEXT_PUBLIC_API_URL not set! Using localhost fallback. Set NEXT_PUBLIC_API_URL in Vercel environment variables.');
   }
