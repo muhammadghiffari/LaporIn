@@ -16,6 +16,7 @@ const AREA_CENTER_LAT = -6.2746;
 const AREA_CENTER_LNG = 106.8023;
 
 // Struktur RT/RW dengan lokasi real di dalam Kelurahan Cipete, Jakarta Selatan
+// Hanya RW001 dan RW002 (RW002 full generate, RW001 ada data asli)
 const RT_RW_LOCATIONS = {
   'RT001/RW001': {
     center: { lat: -6.2735, lng: 106.8005 }, // Cipete area
@@ -46,21 +47,6 @@ const RT_RW_LOCATIONS = {
     center: { lat: -6.2780, lng: 106.8040 },
     radius: 250,
     address: 'Jl. Pangeran Antasari No. 101-150, Cipete, Jakarta Selatan'
-  },
-  'RT001/RW003': {
-    center: { lat: -6.2725, lng: 106.8045 },
-    radius: 250,
-    address: 'Jl. Fatmawati Raya No. 1-50, Cipete, Jakarta Selatan'
-  },
-  'RT002/RW003': {
-    center: { lat: -6.2735, lng: 106.8060 },
-    radius: 250,
-    address: 'Jl. Fatmawati Raya No. 51-100, Cipete, Jakarta Selatan'
-  },
-  'RT003/RW003': {
-    center: { lat: -6.2745, lng: 106.8075 },
-    radius: 250,
-    address: 'Jl. Fatmawati Raya No. 101-150, Cipete, Jakarta Selatan'
   }
 };
 
@@ -212,19 +198,19 @@ async function seed() {
   // 1. Super Admin (email asli untuk notifikasi)
   console.log('1️⃣  Membuat Super Admin...');
   const admin = await prisma.user.upsert({
-    where: { email: 'kepodehlol54@gmail.com' },
+    where: { email: 'abhisuryanu9roho@gmail.com' },
     update: {
       passwordHash,
-      name: 'Admin Sistem',
+      name: 'Abhi Surya Nugroho',
       role: 'admin',
       rtRw: null,
       jenisKelamin: 'laki_laki',
       isVerified: true
     },
     create: {
-      email: 'kepodehlol54@gmail.com', // Email asli untuk notifikasi
+      email: 'abhisuryanu9roho@gmail.com', // Email asli untuk notifikasi
       passwordHash,
-      name: 'Admin Sistem',
+      name: 'Abhi Surya Nugroho',
       role: 'admin',
       rtRw: null,
       jenisKelamin: 'laki_laki',
@@ -239,7 +225,7 @@ async function seed() {
   console.log('2️⃣  Membuat Admin RW...');
   const rwNumbers = [...new Set(rtRwList.map(rtRw => rtRw.split('/')[1]))];
   const realEmails = {
-    'RW001': 'wadidawcihuy@gmail.com', // Email asli untuk Admin RW001
+    'RW001': 'kepodehlol54@gmail.com', // Email asli untuk Admin RW001
   };
   
   for (let rwIndex = 0; rwIndex < rwNumbers.length; rwIndex++) {
@@ -247,23 +233,27 @@ async function seed() {
     const email = realEmails[rw] || `admin${rw.toLowerCase()}@example.com`;
     const isRealEmail = realEmails[rw] ? true : false;
     
+    // Nama untuk RW001 pakai nama asli, lainnya generate
+    const adminRwName = isRealEmail ? 'Admin RW 001' : `Admin ${rw}`;
+    const adminRwJenisKelamin = isRealEmail ? 'laki_laki' : (Math.random() > 0.5 ? 'laki_laki' : 'perempuan');
+    
     const adminRw = await prisma.user.upsert({
       where: { email },
       update: {
         passwordHash,
-        name: `Admin ${rw}`,
+        name: adminRwName,
         role: 'admin_rw',
         rtRw: null,
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: adminRwJenisKelamin,
         isVerified: true
       },
       create: {
         email,
         passwordHash,
-        name: `Admin ${rw}`,
+        name: adminRwName,
         role: 'admin_rw',
         rtRw: null, // Admin RW tidak punya RT spesifik
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: adminRwJenisKelamin,
         isVerified: true,
         createdAt: randomDate(threeMonthsAgo, new Date(threeMonthsAgo.getTime() + 30 * 24 * 60 * 60 * 1000))
       }
@@ -278,9 +268,9 @@ async function seed() {
   
   const realEmailsRT = {
     'RT001/RW001': {
-      ketua: 'arythegodhand@gmail.com',
-      sekretaris: 'syncrazelled@gmail.com',
-      pengurus: 'gampanggaming20@gmail.com'
+      ketua: { email: 'gaminggampang20@gmail.com', name: 'Dyandra', jenisKelamin: 'laki_laki' },
+      pengurus: { email: 'syncrazelled@gmail.com', name: 'Muhammad Alfarisi Setiyono', jenisKelamin: 'laki_laki' }
+      // Sekretaris: generate (tidak perlu email asli)
     }
   };
   
@@ -289,15 +279,19 @@ async function seed() {
     const rtRwKey = rtRw.replace(/\//g, '').toLowerCase();
     
     // Ketua RT
-    const ketuaEmail = realEmailsForRT.ketua || `ketua${rtRwKey}@example.com`;
+    const ketuaData = realEmailsForRT.ketua;
+    const ketuaEmail = ketuaData?.email || `ketua${rtRwKey}@example.com`;
+    const ketuaName = ketuaData?.name || `Ketua ${rtRw}`;
+    const ketuaJenisKelamin = ketuaData?.jenisKelamin || 'laki_laki';
+    
     const ketua = await prisma.user.upsert({
       where: { email: ketuaEmail },
       update: {
         passwordHash,
-        name: `Ketua ${rtRw}`,
+        name: ketuaName,
         role: 'ketua_rt',
         rtRw,
-        jenisKelamin: 'laki_laki',
+        jenisKelamin: ketuaJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -306,10 +300,10 @@ async function seed() {
       create: {
         email: ketuaEmail,
         passwordHash,
-        name: `Ketua ${rtRw}`,
+        name: ketuaName,
         role: 'ketua_rt',
         rtRw,
-        jenisKelamin: 'laki_laki',
+        jenisKelamin: ketuaJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -319,8 +313,9 @@ async function seed() {
     });
     createdUsers[`ketua_${rtRw}`] = ketua;
     
-    // Sekretaris RT
-    const sekretarisEmail = realEmailsForRT.sekretaris || `sekretaris${rtRwKey}@example.com`;
+    // Sekretaris RT (generate, tidak perlu email asli)
+    const sekretarisEmail = `sekretaris${rtRwKey}@example.com`;
+    const sekretarisJenisKelamin = Math.random() > 0.5 ? 'laki_laki' : 'perempuan';
     const sekretaris = await prisma.user.upsert({
       where: { email: sekretarisEmail },
       update: {
@@ -328,7 +323,7 @@ async function seed() {
         name: `Sekretaris ${rtRw}`,
         role: 'sekretaris_rt',
         rtRw,
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: sekretarisJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -340,7 +335,7 @@ async function seed() {
         name: `Sekretaris ${rtRw}`,
         role: 'sekretaris_rt',
         rtRw,
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: sekretarisJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -351,15 +346,19 @@ async function seed() {
     createdUsers[`sekretaris_${rtRw}`] = sekretaris;
     
     // Pengurus RT
-    const pengurusEmail = realEmailsForRT.pengurus || `pengurus${rtRwKey}@example.com`;
+    const pengurusData = realEmailsForRT.pengurus;
+    const pengurusEmail = pengurusData?.email || `pengurus${rtRwKey}@example.com`;
+    const pengurusName = pengurusData?.name || `Pengurus ${rtRw}`;
+    const pengurusJenisKelamin = pengurusData?.jenisKelamin || (Math.random() > 0.5 ? 'laki_laki' : 'perempuan');
+    
     const pengurus = await prisma.user.upsert({
       where: { email: pengurusEmail },
       update: {
         passwordHash,
-        name: `Pengurus ${rtRw}`,
+        name: pengurusName,
         role: 'pengurus',
         rtRw,
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: pengurusJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -368,10 +367,10 @@ async function seed() {
       create: {
         email: pengurusEmail,
         passwordHash,
-        name: `Pengurus ${rtRw}`,
+        name: pengurusName,
         role: 'pengurus',
         rtRw,
-        jenisKelamin: Math.random() > 0.5 ? 'laki_laki' : 'perempuan',
+        jenisKelamin: pengurusJenisKelamin,
         isVerified: true,
         rtRwLatitude: locationData.center.lat,
         rtRwLongitude: locationData.center.lng,
@@ -381,7 +380,7 @@ async function seed() {
     });
     createdUsers[`pengurus_${rtRw}`] = pengurus;
     
-    const hasRealEmails = realEmailsForRT.ketua || realEmailsForRT.sekretaris || realEmailsForRT.pengurus;
+    const hasRealEmails = realEmailsForRT.ketua || realEmailsForRT.pengurus;
     console.log(`   ✅ ${rtRw} - Center: ${locationData.center.lat}, ${locationData.center.lng}, Radius: ${locationData.radius}m${hasRealEmails ? ' - Email asli digunakan' : ''}`);
   }
   console.log('');
@@ -389,10 +388,10 @@ async function seed() {
   // 4. Buat warga (10-15 warga per RT) - warga pertama di RT001/RW001 pakai email asli
   console.log('4️⃣  Membuat warga dengan lokasi di area RT/RW...');
   let wargaIndex = 1;
-  // Warga khusus dengan data lengkap dan email asli (Kelurahan Cipete)
+  // Warga khusus dengan data lengkap dan email asli (RT001/RW001)
   const specialWarga = {
-    email: 'abhisuryanugroho0@gmail.com',
-    name: 'Abhi Surya Nugroho',
+    email: 'wadidawcihuy@gmail.com',
+    name: 'Muhammad Ghiffari',
     rtRw: 'RT001/RW001',
     jenisKelamin: 'laki_laki'
   };
