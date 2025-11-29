@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
 import Link from 'next/link';
@@ -25,12 +25,42 @@ export default function LoginPage() {
   const [mounted, setMounted] = useState(false);
   const { login } = useAuthStore();
   const router = useRouter();
-  const { toasts, showToast, success: showSuccess, error: showError, removeToast } = useToast();  
+  const { toasts, showToast, success: showSuccess, error: showError, removeToast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);  
 
   // Fix hydration mismatch: hanya render setelah client mount
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Cleanup kamera saat unmount, step change, atau navigate away
+  useEffect(() => {
+    // Cleanup saat step berubah dari face-verification ke credentials
+    if (step !== 'face-verification') {
+      console.log('[LoginPage] Step changed, cleaning up camera...');
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('[LoginPage] Camera track stopped');
+        });
+        videoRef.current.srcObject = null;
+      }
+    }
+
+    // Cleanup saat unmount
+    return () => {
+      console.log('[LoginPage] Cleaning up camera on unmount...');
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('[LoginPage] Camera track stopped on unmount');
+        });
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [step]);
 
   // Check for registration success message from URL
   useEffect(() => {
@@ -319,6 +349,7 @@ export default function LoginPage() {
                       onError={(error) => setFaceError(error)}
                       autoStart={true}
                       hideAfterCapture={true}
+                      videoRef={videoRef}
                     />
                   )}
                   {faceDescriptor && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/authStore';
 import Link from 'next/link';
@@ -22,6 +22,31 @@ export default function RegisterPage() {
   const { register } = useAuthStore();
   const router = useRouter();
   const { toasts, success, error: showError, removeToast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Cleanup kamera saat unmount atau navigate away
+  useEffect(() => {
+    return () => {
+      console.log('[RegisterPage] Cleaning up camera on unmount...');
+      // Matikan semua media streams
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('[RegisterPage] Camera track stopped');
+        });
+        videoRef.current.srcObject = null;
+      }
+      // Juga cek navigator.mediaDevices untuk memastikan semua stream dimatikan
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(() => {
+          // Ignore errors
+        });
+    };
+  }, []);
 
   const handleFaceCaptured = (descriptor: number[]) => {
     setFaceDescriptor(descriptor);
@@ -179,12 +204,15 @@ export default function RegisterPage() {
             </div>
 
             <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <FaceCapture
-                onFaceCaptured={handleFaceCaptured}
-                onError={(error) => setFaceError(error)}
-                autoStart={!faceDescriptor}
-                hideAfterCapture={false}
-              />
+              {showFaceCapture && (
+                <FaceCapture
+                  onFaceCaptured={handleFaceCaptured}
+                  onError={(error) => setFaceError(error)}
+                  autoStart={!faceDescriptor}
+                  hideAfterCapture={false}
+                  videoRef={videoRef}
+                />
+              )}
               {faceError && (
                 <p className="mt-2 text-xs text-red-600 font-medium">{faceError}</p>
               )}

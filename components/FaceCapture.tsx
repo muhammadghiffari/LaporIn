@@ -219,37 +219,73 @@ export default function FaceCapture({
 
   // Handle autoStart changes (stop jika menjadi false, start jika menjadi true dan belum pernah start)
   useEffect(() => {
-    // Skip jika models belum loaded atau sudah captured
-    if (!modelsLoaded || faceCaptured) return;
+    // Skip jika models belum loaded
+    if (!modelsLoaded) return;
     
     if (!autoStart && isCapturing) {
       console.log('[FaceCapture] AutoStart disabled, stopping video...');
       stopVideo();
       hasAutoStartedRef.current = false; // Reset agar bisa start lagi jika autoStart menjadi true
-    } else if (autoStart && !isCapturing && !hasAutoStartedRef.current) {
+    } else if (autoStart && !isCapturing && !hasAutoStartedRef.current && !faceCaptured) {
       console.log('[FaceCapture] AutoStart enabled, starting video...');
       hasAutoStartedRef.current = true;
       startVideo();
     }
-  }, [autoStart]); // Hanya watch autoStart, tidak watch isCapturing untuk prevent loop
+  }, [autoStart, modelsLoaded, isCapturing, faceCaptured]); // Watch semua dependencies yang relevan
 
   // Cleanup on unmount - pastikan kamera dimatikan
   useEffect(() => {
     return () => {
       console.log('[FaceCapture] Component unmounting, cleaning up...');
       // Matikan semua track kamera saat komponen unmount
+      // Gunakan stream dari closure terbaru
       if (stream) {
         stream.getTracks().forEach(track => {
           track.stop();
           console.log('[FaceCapture] Camera track stopped on unmount');
         });
       }
-      // Jangan set state di cleanup karena komponen sudah unmount
-      if (videoRef.current) {
+      // Juga cek videoRef untuk memastikan stream dimatikan
+      if (videoRef.current?.srcObject) {
+        const currentStream = videoRef.current.srcObject as MediaStream;
+        currentStream.getTracks().forEach(track => {
+          track.stop();
+          console.log('[FaceCapture] Camera track stopped from videoRef');
+        });
         videoRef.current.srcObject = null;
       }
     };
-  }, []); // Empty dependency - hanya cleanup saat unmount
+  }, [stream]); // Track stream untuk cleanup yang benar
+
+  // Cleanup saat page visibility change (user switch tab atau navigate)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && isCapturing) {
+        console.log('[FaceCapture] Page hidden, stopping camera...');
+        stopVideo();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      console.log('[FaceCapture] Page unloading, stopping camera...');
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current?.srcObject) {
+        const currentStream = videoRef.current.srcObject as MediaStream;
+        currentStream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isCapturing, stream]);
 
   return (
     <div className="space-y-4">
