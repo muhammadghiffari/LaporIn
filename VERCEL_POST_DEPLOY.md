@@ -18,8 +18,9 @@ NEXT_PUBLIC_API_URL=https://api-laporin.up.railway.app
 
 ### Recommended:
 ```
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyAryzzk5CVzGDowt4AJ1JaDm9QeKrXl30M
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 ```
+⚠️ **Dapatkan API key dari Google Cloud Console!** Jangan commit API key ke repository!
 
 **Catatan:**
 - ✅ Set untuk semua environments: **Production, Preview, Development**
