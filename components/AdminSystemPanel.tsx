@@ -570,6 +570,7 @@ export default function AdminSystemPanel() {
             <TextField
               fullWidth
               label="Nama Lengkap"
+              className='mb-4'
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               variant="outlined"
@@ -583,6 +584,7 @@ export default function AdminSystemPanel() {
             />
             <TextField
               fullWidth
+              className='mb-4'
               label="Email"
               type="email"
               value={formData.email}
@@ -598,6 +600,7 @@ export default function AdminSystemPanel() {
             />
             <TextField
               fullWidth
+              className='mb-4'
               label="Password"
               type="password"
               value={formData.password}
@@ -635,6 +638,7 @@ export default function AdminSystemPanel() {
             </FormControl>
             <TextField
               fullWidth
+              className='mb-4'
               label="RT/RW"
               placeholder="Contoh: RT001/RW005"
               value={formData.rt_rw}
@@ -656,7 +660,7 @@ export default function AdminSystemPanel() {
               }}
             />
             <FormControl fullWidth size="medium">
-              <InputLabel>Jenis Kelamin (opsional)</InputLabel>
+              <InputLabel className='mb-2'>Jenis Kelamin (opsional)</InputLabel>
               <Select
                 value={formData.jenis_kelamin}
                 onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}

@@ -507,62 +507,62 @@ export default function ChatWidget() {
                   )}
                   <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex items-start gap-2 sm:gap-3 max-w-[90%] sm:max-w-[85%] ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                      {m.role === 'assistant' && (
-                        <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-full p-1.5 sm:p-2 shadow-lg ring-2 ring-blue-200/50 mt-0.5 flex-shrink-0">
-                          <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
-                        </div>
-                      )}
-                      <div
-                        className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md transition-all hover:shadow-lg break-words ${
+                  {m.role === 'assistant' && (
+                    <div className="bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-full p-1.5 sm:p-2 shadow-lg ring-2 ring-blue-200/50 mt-0.5 flex-shrink-0">
+                      <Bot className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                    </div>
+                  )}
+                  <div
+                    className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md transition-all hover:shadow-lg break-words ${
                           isUser
-                            ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-tr-sm'
-                            : 'bg-white border-2 border-gray-100 text-gray-800 rounded-tl-sm shadow-sm hover:border-blue-200'
-                        }`}
-                      >
-                        {m.role === 'assistant' ? (
-                          <div className="markdown-content break-words">
-                            <ReactMarkdown
-                              components={{
-                                p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
-                                strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                                em: ({ children }) => <em className="italic">{children}</em>,
-                                ul: ({ children }) => <ul className="list-disc list-inside my-2 space-y-1 ml-1">{children}</ul>,
-                                ol: ({ children }) => <ol className="list-decimal list-inside my-2 space-y-1 ml-1">{children}</ol>,
-                                li: ({ children }) => <li className="ml-1">{children}</li>,
-                                code: ({ children, className }) => {
-                                  const isInline = !className;
-                                  return isInline ? (
-                                    <code className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{children}</code>
-                                  ) : (
-                                    <code className="block bg-gray-100 text-gray-800 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
-                                  );
-                                },
-                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h1>,
-                                h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h2>,
-                                h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-gray-900">{children}</h3>,
-                                blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-300 pl-3 my-2 italic text-gray-700">{children}</blockquote>,
-                                hr: () => <hr className="my-3 border-gray-200" />,
-                              }}
-                            >
-                              {m.content}
-                            </ReactMarkdown>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {m.imageUrl && (
-                              <div className="relative rounded-lg overflow-hidden border border-gray-300 max-w-xs">
-                                <img
-                                  src={m.imageUrl}
-                                  alt="Attached"
-                                  className="w-full h-auto max-h-48 object-contain bg-gray-50"
-                                />
-                              </div>
-                            )}
-                            {m.content && m.content !== '[Gambar terlampir]' && (
-                              <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                            )}
+                        ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-tr-sm'
+                        : 'bg-white border-2 border-gray-100 text-gray-800 rounded-tl-sm shadow-sm hover:border-blue-200'
+                    }`}
+                  >
+                    {m.role === 'assistant' ? (
+                      <div className="markdown-content break-words">
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            em: ({ children }) => <em className="italic">{children}</em>,
+                            ul: ({ children }) => <ul className="list-disc list-inside my-2 space-y-1 ml-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal list-inside my-2 space-y-1 ml-1">{children}</ol>,
+                            li: ({ children }) => <li className="ml-1">{children}</li>,
+                            code: ({ children, className }) => {
+                              const isInline = !className;
+                              return isInline ? (
+                                <code className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-xs font-mono font-semibold">{children}</code>
+                              ) : (
+                                <code className="block bg-gray-100 text-gray-800 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
+                              );
+                            },
+                            h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0 text-gray-900">{children}</h3>,
+                            blockquote: ({ children }) => <blockquote className="border-l-4 border-blue-300 pl-3 my-2 italic text-gray-700">{children}</blockquote>,
+                            hr: () => <hr className="my-3 border-gray-200" />,
+                          }}
+                        >
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {m.imageUrl && (
+                          <div className="relative rounded-lg overflow-hidden border border-gray-300 max-w-xs">
+                            <img
+                              src={m.imageUrl}
+                              alt="Attached"
+                              className="w-full h-auto max-h-48 object-contain bg-gray-50"
+                            />
                           </div>
                         )}
+                        {m.content && m.content !== '[Gambar terlampir]' && (
+                          <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                        )}
+                      </div>
+                    )}
                         {timestampLabel && (
                           <div
                             className={`mt-2 flex items-center gap-1 text-[10px] sm:text-xs font-medium ${
@@ -571,16 +571,16 @@ export default function ChatWidget() {
                           >
                             <Clock3 className="w-3 h-3" />
                             <span>{timestampLabel}</span>
-                          </div>
+                  </div>
                         )}
                       </div>
                       {isUser && (
-                        <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-full p-1.5 sm:p-2 shadow-md mt-0.5 flex-shrink-0 ring-2 ring-gray-100">
-                          <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
-                        </div>
-                      )}
+                    <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-full p-1.5 sm:p-2 shadow-md mt-0.5 flex-shrink-0 ring-2 ring-gray-100">
+                      <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600"></div>
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
                 </div>
               );
             })}

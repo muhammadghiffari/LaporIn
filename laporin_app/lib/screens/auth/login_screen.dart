@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/laporin_logo.dart';
+import 'package:flutter/widgets.dart';
 import '../dashboard/dashboard_screen.dart';
 import 'register_screen.dart';
 import 'face_verification_screen.dart';
@@ -107,10 +107,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Logo & Title
-          const Center(
-            child: LaporInLogo(
-              size: 80,
-              showText: false,
+          Center(
+            child: Image.asset(
+              'assets/images/icon.png',
+              width: 80,
+              height: 80,
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(height: 24),

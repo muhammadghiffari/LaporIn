@@ -22,8 +22,14 @@ export const metadata: Metadata = {
   title: "LaporIn - Platform Laporan Warga RT/RW",
   description: "Platform untuk mengelola laporan warga di level RT/RW dengan integrasi AI dan Blockchain",
   icons: {
-    // Gunakan path string untuk favicon, bukan import image (agar bisa diserialisasi RSC)
-    icon: "/app/assets/logo/icon.png",
+    icon: [
+      { url: "/icon.png", type: "image/png" },
+      { url: "/icon.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon.png", type: "image/png", sizes: "16x16" },
+    ],
+    apple: [
+      { url: "/icon.png", type: "image/png" },
+    ],
   },
 };
 

@@ -265,19 +265,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // Fungsi untuk menghilangkan markdown formatting (bintang, dll)
   String _removeMarkdown(String text) {
-    // Hapus bold markdown (**text** atau __text__)
-    text = text.replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1');
-    text = text.replaceAll(RegExp(r'__(.*?)__'), r'$1');
+    if (text.isEmpty) return text;
     
-    // Hapus italic markdown (*text* atau _text_)
-    text = text.replaceAll(RegExp(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)'), r'$1');
-    text = text.replaceAll(RegExp(r'(?<!_)_(?!_)(.*?)(?<!_)_(?!_)'), r'$1');
+    // Hapus bold markdown (**text** atau __text__) - gunakan replaceAllMapped untuk menghindari masalah dengan $
+    text = text.replaceAllMapped(RegExp(r'\*\*(.*?)\*\*'), (match) => match.group(1) ?? '');
+    text = text.replaceAllMapped(RegExp(r'__(.*?)__'), (match) => match.group(1) ?? '');
     
-    // Hapus link markdown [text](url)
-    text = text.replaceAll(RegExp(r'\[([^\]]+)\]\([^\)]+\)'), r'$1');
+    // Hapus italic markdown (*text* atau _text_) - hati-hati dengan bold yang sudah dihapus
+    text = text.replaceAllMapped(RegExp(r'(?<!\*)\*(?!\*)([^*]+?)(?<!\*)\*(?!\*)'), (match) => match.group(1) ?? '');
+    text = text.replaceAllMapped(RegExp(r'(?<!_)_(?!_)([^_]+?)(?<!_)_(?!_)'), (match) => match.group(1) ?? '');
     
-    // Hapus code markdown (`text`)
-    text = text.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
+    // Hapus link markdown [text](url) - ambil text saja
+    text = text.replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^\)]+\)'), (match) => match.group(1) ?? '');
+    
+    // Hapus code markdown (`text`) - ambil text saja
+    text = text.replaceAllMapped(RegExp(r'`([^`]+)`'), (match) => match.group(1) ?? '');
+    
+    // Hapus sisa markdown yang mungkin terlewat
+    text = text.replaceAll(RegExp(r'\*\*'), ''); // Hapus sisa **
+    text = text.replaceAll(RegExp(r'__'), ''); // Hapus sisa __
+    text = text.replaceAll(RegExp(r'(?<!\*)\*(?!\*)'), ''); // Hapus sisa * (bukan **)
+    text = text.replaceAll(RegExp(r'(?<!_)_(?!_)'), ''); // Hapus sisa _ (bukan __)
+    text = text.replaceAll(RegExp(r'`'), ''); // Hapus sisa `
+    
+    // Bersihkan spasi berlebihan
+    text = text.replaceAll(RegExp(r'\s+'), ' ');
+    text = text.trim();
     
     return text;
   }
@@ -393,16 +406,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length + (_isLoading ? 1 : 0) + (_pendingReportDraft != null ? 1 : 0),
+                    itemCount: _messages.length + (_isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
-                      // Pending Draft Card
-                      if (_pendingReportDraft != null && index == _messages.length) {
-                        final draft = _pendingReportDraft!;
-                        return _buildDraftCard(draft);
-                      }
-                      
                       // Loading indicator
-                      if (index == _messages.length + (_pendingReportDraft != null ? 1 : 0)) {
+                      if (index == _messages.length) {
                         return Padding(
                           padding: const EdgeInsets.all(16),
                           child: Row(
@@ -460,13 +467,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         );
                       }
                       
-                      // Adjust index untuk draft card
-                      final messageIndex = index > _messages.length ? index - 1 : index;
-                      final message = _messages[messageIndex];
+                      // Get message
+                      final message = _messages[index];
                       final isUser = message['role'] == 'user';
                       final DateTime? timestamp = message['timestamp'] as DateTime?;
-                      final previousTimestamp = messageIndex > 0
-                          ? _messages[messageIndex - 1]['timestamp'] as DateTime?
+                      final previousTimestamp = index > 0
+                          ? _messages[index - 1]['timestamp'] as DateTime?
                           : null;
                       final bool showDateSeparator =
                           timestamp != null && (previousTimestamp == null || !_isSameDay(timestamp, previousTimestamp));
@@ -481,7 +487,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           child: Row(
                             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               if (!isUser)
                                 Container(
@@ -527,6 +533,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       if (message['imageUrl'] != null)
                                         Container(
@@ -541,7 +548,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                             ),
                                           ),
                                         ),
-                                      Text(
+                                      SelectableText(
                                         _removeMarkdown(message['content']),
                                         style: TextStyle(
                                           color: isUser
@@ -550,6 +557,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                                   ? Colors.grey[100]
                                                   : Colors.black87),
                                           fontSize: 14,
+                                          height: 1.4,
                                         ),
                                       ),
                                       // Tampilkan tombol CTA jika ada reportData (SELALU tampilkan tombol jika ada reportData)

@@ -14,6 +14,7 @@ class FaceCaptureWidget extends StatefulWidget {
   final Function(File, bool)? onPhotoCaptured; // Added bool parameter for isFrontCamera
   final bool autoStart;
   final bool fullscreen;
+  final bool stopAfterCapture; // Stop camera after capture (for 2FA)
 
   const FaceCaptureWidget({
     super.key,
@@ -22,6 +23,7 @@ class FaceCaptureWidget extends StatefulWidget {
     this.onPhotoCaptured,
     this.autoStart = false,
     this.fullscreen = false,
+    this.stopAfterCapture = false, // Default: keep camera running for retakes
   });
 
   @override
@@ -266,6 +268,12 @@ class _FaceCaptureWidgetState extends State<FaceCaptureWidget> {
 
       // Notify that photo was captured - backend will validate
       widget.onFaceCaptured([]);
+      
+      // Stop camera after capture if stopAfterCapture is true (for 2FA)
+      if (widget.stopAfterCapture) {
+        // Camera already stopped, just ensure it stays stopped
+        return;
+      }
       
       // Restart camera setelah capture agar tetap hidup untuk ambil ulang jika perlu
       if (wasCapturing && _controller != null && _controller!.value.isInitialized) {

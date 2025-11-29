@@ -2,7 +2,9 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import useAuthStore from '@/store/authStore';
+import AppIcon from '@/app/assets/logo/icon.png';
 import {
   Home,
   FileText,
@@ -94,9 +96,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo dengan close button untuk mobile */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between" suppressHydrationWarning>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center" suppressHydrationWarning>
-              <span className="text-white font-bold text-xl">L</span>
-            </div>
+            <Image
+              src={AppIcon}
+              alt="LaporIn"
+              width={40}
+              height={40}
+              className="rounded-xl object-contain"
+            />
             <span className="text-xl font-bold text-gray-900">LaporIn</span>
           </Link>
           <button

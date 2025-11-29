@@ -84,25 +84,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
+            Image.asset(
+              'assets/images/icon.png',
               width: 32,
               height: 32,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue[600]!, Colors.blue[800]!],
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text(
-                  'L',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-              ),
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: 12),
             const Text(

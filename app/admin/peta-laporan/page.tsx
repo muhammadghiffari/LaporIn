@@ -151,13 +151,22 @@ export default function PetaLaporanPage() {
     const fetchRwList = async () => {
       try {
         const { data } = await api.get('/reports/stats/rw-list');
-        setRwList(data.rwList || []);
+        console.log('[PetaLaporan] RW List response:', data);
+        if (data && data.rwList) {
+          setRwList(data.rwList);
+          console.log('[PetaLaporan] RW List set:', data.rwList);
+        } else {
+          console.warn('[PetaLaporan] RW List is empty or undefined');
+          setRwList([]);
+        }
       } catch (e: any) {
         console.error('Error fetching RW list:', e);
+        showError('Gagal memuat daftar RW: ' + (e.response?.data?.error || e.message));
+        setRwList([]);
       }
     };
     fetchRwList();
-  }, [mounted, isSuperAdmin]);
+  }, [mounted, isSuperAdmin, showError]);
   
   // Fetch RT list untuk Admin RW atau Super Admin (berdasarkan RW filter)
   useEffect(() => {
@@ -355,19 +364,19 @@ const fitMapToBoundary = useCallback((boundary: RTRwBoundary, mapInstance?: goog
     if (isSuperAdmin && !rwFilter && !rtFilter && allBoundaries.length > 0) {
       return;
     }
-    const fallbackReport = filteredReports.find(report => report.lat && report.lng);
-    if (fallbackReport) {
+      const fallbackReport = filteredReports.find(report => report.lat && report.lng);
+      if (fallbackReport) {
       if (fallbackPositionKeyRef.current === fallbackReport.id) {
         return;
       }
       fallbackPositionKeyRef.current = fallbackReport.id;
-      const fallbackCenter = { lat: fallbackReport.lat, lng: fallbackReport.lng };
+        const fallbackCenter = { lat: fallbackReport.lat, lng: fallbackReport.lng };
       // Set userInteracting untuk mencegah re-render loop
       setUserInteracting(true);
-      mapRef.current.setCenter(fallbackCenter);
-      mapRef.current.setZoom(14);
-      setMapCenter(fallbackCenter);
-      setMapZoom(14);
+        mapRef.current.setCenter(fallbackCenter);
+        mapRef.current.setZoom(14);
+        setMapCenter(fallbackCenter);
+        setMapZoom(14);
       // Reset setelah delay untuk memastikan animation selesai
       setTimeout(() => {
         setUserInteracting(false);
@@ -380,10 +389,10 @@ const fitMapToBoundary = useCallback((boundary: RTRwBoundary, mapInstance?: goog
     fallbackPositionKeyRef.current = 'default';
     // Set userInteracting untuk mencegah re-render loop
     setUserInteracting(true);
-    mapRef.current.setCenter(defaultCenter);
-    mapRef.current.setZoom(12);
-    setMapCenter(defaultCenter);
-    setMapZoom(12);
+        mapRef.current.setCenter(defaultCenter);
+        mapRef.current.setZoom(12);
+        setMapCenter(defaultCenter);
+        setMapZoom(12);
     // Reset setelah delay untuk memastikan animation selesai
     setTimeout(() => {
       setUserInteracting(false);
@@ -801,17 +810,17 @@ const fitMapToBoundary = useCallback((boundary: RTRwBoundary, mapInstance?: goog
 
     const mapOptions = useMemo(() => {
       const options: google.maps.MapOptions = {
-        disableDefaultUI: false,
-        zoomControl: true,
-        streetViewControl: false,
-        mapTypeControl: true,
-        fullscreenControl: true,
-        styles: [
-          {
-            featureType: 'poi',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }]
-          }
+          disableDefaultUI: false,
+          zoomControl: true,
+          streetViewControl: false,
+          mapTypeControl: true,
+          fullscreenControl: true,
+          styles: [
+            {
+              featureType: 'poi',
+              elementType: 'labels',
+              stylers: [{ visibility: 'off' }]
+            }
         ],
       };
 
@@ -1460,56 +1469,56 @@ const fitMapToBoundary = useCallback((boundary: RTRwBoundary, mapInstance?: goog
               </FormControl>
 
               {/* Set Boundary Button */}
-              {canSetBoundary && (
+            {canSetBoundary && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {isSettingBoundary ? (
-                    <>
+                {isSettingBoundary ? (
+                  <>
                       <Box sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
                         {boundaryTargetLabel
                           ? `Mengatur area ${boundaryTargetLabel}. Klik pada peta untuk menentukan titik pusat lalu atur radius.`
                           : 'Klik pada peta untuk menentukan titik pusat lalu atur radius.'}
                       </Box>
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <input
-                          type="number"
-                          value={newBoundaryRadius}
-                          onChange={(e) => setNewBoundaryRadius(parseFloat(e.target.value) || 500)}
+                      <input
+                        type="number"
+                        value={newBoundaryRadius}
+                        onChange={(e) => setNewBoundaryRadius(parseFloat(e.target.value) || 500)}
                           className="px-3 py-2 border border-gray-300 rounded-lg w-full"
-                          placeholder="Radius (meter)"
-                          min="100"
-                          max="5000"
-                        />
+                        placeholder="Radius (meter)"
+                        min="100"
+                        max="5000"
+                      />
                       </Box>
                       <Box sx={{ display: 'flex', gap: 1 }}>
-                        <button
-                          onClick={handleSaveBoundary}
+                      <button
+                        onClick={handleSaveBoundary}
                           className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
-                        >
+                      >
                           <Save className="h-4 w-4 inline mr-1" />
-                          Simpan
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsSettingBoundary(false);
-                            setNewBoundaryCenter(null);
-                          }}
+                        Simpan
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsSettingBoundary(false);
+                          setNewBoundaryCenter(null);
+                        }}
                           className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium"
-                        >
-                          Batal
-                        </button>
+                      >
+                        Batal
+                      </button>
                       </Box>
-                    </>
-                  ) : (
-                    <button
+                  </>
+                ) : (
+                  <button
                       onClick={handleStartBoundarySetting}
                       disabled={isSuperAdmin && !boundaryTargetLabel}
                       title={isSuperAdmin && !boundaryTargetLabel ? 'Pilih RW atau RT terlebih dahulu' : undefined}
                       className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      <Settings className="h-4 w-4" />
+                  >
+                    <Settings className="h-4 w-4" />
                       {isSuperAdmin ? 'Set Lokasi RW/RT Terpilih' : 'Set Lokasi Wilayah Saya'}
-                    </button>
-                  )}
+                  </button>
+                )}
                 </Box>
               )}
             </Box>

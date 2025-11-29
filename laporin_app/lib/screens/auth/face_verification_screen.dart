@@ -43,6 +43,8 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
       final response = await apiService.verifyFaceFromPhoto(photoBase64);
 
       if (response.statusCode == 200 && response.data['verified'] == true) {
+        // Verifikasi berhasil, langsung navigate ke dashboard
+        // Camera sudah di-stop setelah capture, jadi langsung close
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const DashboardScreen()),
@@ -160,6 +162,7 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
                           },
                           autoStart: true,
                           fullscreen: true,
+                          stopAfterCapture: true, // Stop camera after capture for 2FA
                         ),
                       )
                     else
