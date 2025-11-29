@@ -33,6 +33,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     'Tips membuat laporan yang jelas',
   ];
 
+  bool _localeInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,13 +49,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _initializeLocale() async {
+    if (_localeInitialized) return;
+    
     try {
       await initializeDateFormatting('id_ID', null);
       Intl.defaultLocale = 'id_ID';
+      _localeInitialized = true;
+      debugPrint('✅ Locale initialized: id_ID');
     } catch (e) {
-      debugPrint('Error initializing locale: $e');
+      debugPrint('❌ Error initializing locale: $e');
       // Fallback ke default locale jika gagal
-      Intl.defaultLocale = 'en_US';
+      try {
+        await initializeDateFormatting('en_US', null);
+        Intl.defaultLocale = 'en_US';
+        _localeInitialized = true;
+        debugPrint('✅ Fallback locale initialized: en_US');
+      } catch (e2) {
+        debugPrint('❌ Fallback locale also failed: $e2');
+        Intl.defaultLocale = 'en_US';
+        _localeInitialized = true;
+      }
     }
   }
 
@@ -1268,20 +1283,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   String _formatDateHeader(DateTime dateTime) {
+    if (!_localeInitialized) {
+      // Jika locale belum terinisialisasi, gunakan format default
+      return DateFormat('EEEE, d MMM yyyy').format(dateTime);
+    }
     try {
       return DateFormat('EEEE, d MMM yyyy', 'id_ID').format(dateTime);
     } catch (e) {
+      debugPrint('Error formatting date header: $e');
       // Fallback jika locale belum terinisialisasi
       return DateFormat('EEEE, d MMM yyyy').format(dateTime);
     }
   }
 
   String _formatDetailedTimestamp(DateTime dateTime) {
+    if (!_localeInitialized) {
+      // Jika locale belum terinisialisasi, gunakan format default
+      final datePart = DateFormat('d MMM yyyy').format(dateTime);
+      final timePart = DateFormat('HH:mm').format(dateTime);
+      return '$datePart • $timePart WIB';
+    }
     try {
       final datePart = DateFormat('d MMM yyyy', 'id_ID').format(dateTime);
       final timePart = DateFormat('HH:mm', 'id_ID').format(dateTime);
       return '$datePart • $timePart WIB';
     } catch (e) {
+      debugPrint('Error formatting timestamp: $e');
       // Fallback jika locale belum terinisialisasi
       final datePart = DateFormat('d MMM yyyy').format(dateTime);
       final timePart = DateFormat('HH:mm').format(dateTime);
