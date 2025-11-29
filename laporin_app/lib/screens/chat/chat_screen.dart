@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../../services/api_service.dart';
@@ -35,13 +36,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    Intl.defaultLocale ??= 'id_ID';
+    // Initialize locale data untuk DateFormat
+    _initializeLocale();
     // Initial message dari AI
     _messages.add({
       'role': 'assistant',
       'content': 'Halo! 👋 Saya Asisten LaporIn yang siap membantu Anda. Ada yang bisa dibantu hari ini? 😊',
       'timestamp': DateTime.now(),
     });
+  }
+
+  Future<void> _initializeLocale() async {
+    try {
+      await initializeDateFormatting('id_ID', null);
+      Intl.defaultLocale = 'id_ID';
+    } catch (e) {
+      debugPrint('Error initializing locale: $e');
+      // Fallback ke default locale jika gagal
+      Intl.defaultLocale = 'en_US';
+    }
   }
 
   @override
@@ -1255,12 +1268,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   String _formatDateHeader(DateTime dateTime) {
-    return DateFormat('EEEE, d MMM yyyy', 'id_ID').format(dateTime);
+    try {
+      return DateFormat('EEEE, d MMM yyyy', 'id_ID').format(dateTime);
+    } catch (e) {
+      // Fallback jika locale belum terinisialisasi
+      return DateFormat('EEEE, d MMM yyyy').format(dateTime);
+    }
   }
 
   String _formatDetailedTimestamp(DateTime dateTime) {
-    final datePart = DateFormat('d MMM yyyy', 'id_ID').format(dateTime);
-    final timePart = DateFormat('HH:mm', 'id_ID').format(dateTime);
-    return '$datePart • $timePart WIB';
+    try {
+      final datePart = DateFormat('d MMM yyyy', 'id_ID').format(dateTime);
+      final timePart = DateFormat('HH:mm', 'id_ID').format(dateTime);
+      return '$datePart • $timePart WIB';
+    } catch (e) {
+      // Fallback jika locale belum terinisialisasi
+      final datePart = DateFormat('d MMM yyyy').format(dateTime);
+      final timePart = DateFormat('HH:mm').format(dateTime);
+      return '$datePart • $timePart WIB';
+    }
   }
 }
